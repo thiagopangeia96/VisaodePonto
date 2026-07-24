@@ -1628,9 +1628,12 @@ function gerarPDFResumo(setoresSelecionados){
     doc.text(txt, margin+5, y); y+=6.5;
   }
   function paragraph(txt,color){
-    doc.setFont(undefined,'normal'); doc.setFontSize(9.3); doc.setTextColor(...(color||TINTA));
+    doc.setFont(undefined,'normal'); doc.setFontSize(9.3);
     const lines=doc.splitTextToSize(txt, pageW-margin*2);
     checkBreak(lines.length*4.3+2);
+    // reaplica a cor DEPOIS do checkBreak — se ele trocou de página, o cabeçalho
+    // muda a cor ativa, e sem isso o parágrafo sairia na cor errada
+    doc.setFont(undefined,'normal'); doc.setFontSize(9.3); doc.setTextColor(...(color||TINTA));
     doc.text(lines, margin, y); y+=lines.length*4.3+4;
   }
   function bullet(txt,color){
@@ -1661,9 +1664,11 @@ function gerarPDFResumo(setoresSelecionados){
     doc.setTextColor(255,255,255); doc.setFontSize(7.6); doc.setFont(undefined,'normal');
     headers.forEach((h,i)=>{ doc.text(h,x+2,y+4.2); x+=colW[i]; });
     y+=6.2;
-    doc.setFont(undefined,'normal'); doc.setTextColor(...TINTA); doc.setFontSize(8);
     rows.forEach((r,ri)=>{
       checkBreak(5.8);
+      // reaplica fonte/cor a CADA linha — se checkBreak() acabou de trocar de página,
+      // o cabeçalho da nova página muda a cor ativa, e sem isso o texto sai apagado/errado
+      doc.setFont(undefined,'normal'); doc.setFontSize(8); doc.setTextColor(...TINTA);
       if(ri%2===1){doc.setFillColor(...LAV); doc.rect(margin,y,pageW-margin*2,5.6,'F');}
       x=margin;
       r.forEach((c,i)=>{
@@ -1708,19 +1713,33 @@ function gerarPDFResumo(setoresSelecionados){
   paragraph(`No recorte analisado, ${an.length} setor(es) somam ${totHead} colaboradores com aderência geral de ${aderGeral}%. `+
     `Isso representa ${hhmm(totPerdida)} de horas perdidas de produtividade e ${hhmm(totGerada)} em horas geradas sem justificativa (passivo de HE não autorizada). `+
     `${setoresCriticos.length?setoresCriticos.length+' setor(es) estão em estado crítico (aderência abaixo de 60%). ':''}`+
-    `${setoresSaudaveis.length?setoresSaudaveis.length+' setor(es) estão saudáveis (aderência ≥80%).':''}`);
+    `${setoresSaudaveis.length?setoresSaudaveis.length+' setor(es) estão saudáveis (aderência acima de 80%).':''}`);
 
   secTitle('Principais insights',ORANGE);
   const piorSetor=[...an].filter(a=>a.aderencia!=null).sort((x,y)=>x.aderencia-y.aderencia)[0];
   const piorPP=[...an].sort((x,y)=>y.perdidaPorPessoa-x.perdidaPorPessoa)[0];
-  const cntReinc={}; base.filter(r=>setoresSelecionados.includes(r.setor)&&(r.situacao==='nok'||r.situacao==='esq')).forEach(r=>{cntReinc[r.nome]=(cntReinc[r.nome]||0)+1;});
-  const reincGeral=Object.entries(cntReinc).filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1]);
+  const cntReinc={};
+  base.filter(r=>setoresSelecionados.includes(r.setor)&&(r.situacao==='nok'||r.situacao==='esq')).forEach(r=>{
+    if(!cntReinc[r.nome])cntReinc[r.nome]={n:0,setor:r.setor,perdida:0,nEsq:0};
+    cntReinc[r.nome].n++; cntReinc[r.nome].perdida+=(r.horasPerdidas||0);
+    if(r.situacao==='esq')cntReinc[r.nome].nEsq++;
+  });
+  const reincGeral=Object.entries(cntReinc).filter(([,v])=>v.n>=2).sort((a,b)=>b[1].n-a[1].n);
   if(piorSetor)bullet(`Setor com menor aderência: ${piorSetor.setor} (${piorSetor.aderencia}%) — problema dominante: ${piorSetor.problema}.`,RED);
   if(piorPP)bullet(`Maior impacto proporcional (perdida/pessoa): ${piorPP.setor} com ${hhmm(Math.round(piorPP.perdidaPorPessoa))} por colaborador — este é o número que compara setores de tamanhos diferentes de forma justa.`,ORANGE);
-  if(reincGeral.length)bullet(`${reincGeral.length} colaborador(es) reincidentes (2+ irregularidades) no recorte. Destaque: ${reincGeral[0][0]} (${reincGeral[0][1]}x).`,PURPLE);
+  if(reincGeral.length)bullet(`${reincGeral.length} colaborador(es) reincidentes (2+ irregularidades) no recorte. Destaque: ${reincGeral[0][0]} (${reincGeral[0][1].n}x).`,PURPLE);
   const totEsqGeral=base.filter(r=>setoresSelecionados.includes(r.setor)&&r.situacao==='esq').length;
   if(totEsqGeral)bullet(`${totEsqGeral} caso(s) de esquecimento de batida de ponto — não penalizam horas, mas indicam falha de disciplina de registro a ser reforçada com a equipe.`,PURPLE);
   if(!piorSetor&&!reincGeral.length)bullet('Nenhum ponto crítico identificado no recorte — equipe em bom nível de conformidade.',GREEN);
+
+  secTitle('Ranking de reincidência',PURPLE);
+  paragraph('Reincidência mede quantas vezes o comportamento se repete — não o total de horas envolvidas. Um colaborador com atrasos curtos porém frequentes pode não aparecer nos rankings de maior impacto em horas, mas a repetição sem consequência tende a normalizar o comportamento para o resto da equipe. Por isso este ranking ordena por número de ocorrências, e não por horas perdidas.');
+  const topReinc=reincGeral.slice(0,10);
+  if(topReinc.length){
+    miniTable(['Colaborador','Setor','Ocorrências','H. Perdidas'],
+      topReinc.map(([n,v])=>[n,v.setor,v.n+(v.nEsq?' ('+v.nEsq+' esq.)':''),hhmm(v.perdida)]),
+      [58,42,45,pageW-margin*2-58-42-45]);
+  } else paragraph('Nenhum colaborador com 2 ou mais ocorrências no recorte.',GREEN);
 
   secTitle('Setores no recorte',PURPLE);
   miniTable(['Setor','Equipe','Aderência','H. Perdidas','Perdida/Pessoa','Geradas S/J'],
@@ -1770,7 +1789,7 @@ function gerarPDFResumo(setoresSelecionados){
 
     secTitle('Diagnóstico',PURPLE);
     if(a.aderencia==null)paragraph('Sem registros de presença suficientes para avaliar este setor no recorte.');
-    else if(a.aderencia>=80)paragraph(`Setor saudável. Aderência de ${a.aderencia}% está dentro do padrão de excelência (≥80%). Recomenda-se manter o acompanhamento de rotina, sem necessidade de ação corretiva imediata.`,undefined);
+    else if(a.aderencia>=80)paragraph(`Setor saudável. Aderência de ${a.aderencia}% está dentro do padrão de excelência (acima de 80%). Recomenda-se manter o acompanhamento de rotina, sem necessidade de ação corretiva imediata.`,undefined);
     else if(a.aderencia>=60)paragraph(`Setor em zona de atenção. Aderência de ${a.aderencia}% pede um alinhamento coletivo com a equipe, com foco no problema dominante: ${a.problema}.`,undefined);
     else paragraph(`Setor crítico. Apenas ${a.aderencia}% de aderência. Recomenda-se reunião com a liderança do setor, revisão de causas estruturais (escala, transporte, dimensionamento) e plano de ação com prazo definido.`,undefined);
 
