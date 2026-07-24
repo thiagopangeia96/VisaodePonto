@@ -1598,13 +1598,16 @@ function gerarPDFResumo(setoresSelecionados){
   const pageW=210, pageH=297, margin=16;
   let y=38, pageNum=1;
 
-  function header(titulo,subtitulo){
+  function header(titulo,subtitulo,corStatus){
     doc.setFillColor(...PURPLE_DARK); doc.rect(0,0,pageW,28,'F');
     doc.setFillColor(...PURPLE); doc.circle(20,14,7.5,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont(undefined,'bold');
+    doc.setFont(undefined,'normal');
+    doc.setTextColor(220,200,245); doc.setFontSize(8);
     doc.text('PANGEIA 96 · OPERAÇÕES', 33, 10);
-    doc.setFontSize(15); doc.text(titulo, 33, 18.5);
-    doc.setFontSize(8.5); doc.setFont(undefined,'normal');
+    if(corStatus){ doc.setFillColor(...corStatus); doc.circle(30.5,16.7,2.3,'F'); }
+    doc.setTextColor(255,255,255); doc.setFontSize(16);
+    doc.text(titulo, corStatus?35.5:33, 19);
+    doc.setFontSize(8.5); doc.setTextColor(220,200,245);
     doc.text(subtitulo||'', 33, 24);
   }
   function footer(){
@@ -1612,16 +1615,17 @@ function gerarPDFResumo(setoresSelecionados){
     doc.text('Pangeia 96 · Painel operacional · Gerado em '+new Date().toLocaleDateString('pt-BR')+' às '+new Date().toLocaleTimeString('pt-BR').slice(0,5), margin, pageH-8);
     doc.text('Página '+pageNum, pageW-margin-14, pageH-8);
   }
-  function novaPagina(titulo,subtitulo){
+  function novaPagina(titulo,subtitulo,corStatus){
     if(pageNum>0){footer();}
     doc.addPage(); pageNum++;
-    header(titulo,subtitulo); y=38;
+    header(titulo,subtitulo,corStatus); y=38;
   }
   function checkBreak(alt){ if(y+alt>pageH-16){ doc.addPage(); pageNum++; header('(continuação)',''); y=38; } }
-  function secTitle(txt,emoji){
+  function secTitle(txt,cor){
     checkBreak(9);
-    doc.setFontSize(11.5); doc.setFont(undefined,'bold'); doc.setTextColor(...PURPLE_DARK);
-    doc.text((emoji?emoji+'  ':'')+txt, margin, y); y+=6.5;
+    doc.setFillColor(...(cor||PURPLE)); doc.roundedRect(margin,y-3.6,3,3,.5,.5,'F');
+    doc.setFontSize(12.5); doc.setFont(undefined,'normal'); doc.setTextColor(...PURPLE_DARK);
+    doc.text(txt, margin+5, y); y+=6.5;
   }
   function paragraph(txt,color){
     doc.setFont(undefined,'normal'); doc.setFontSize(9.3); doc.setTextColor(...(color||TINTA));
@@ -1642,7 +1646,7 @@ function gerarPDFResumo(setoresSelecionados){
     items.forEach((it,i)=>{
       const x=margin+i*(w+gap);
       doc.setFillColor(...LAV); doc.roundedRect(x,y,w,18,2,2,'F');
-      doc.setTextColor(...(it.color||PURPLE)); doc.setFontSize(13); doc.setFont(undefined,'bold');
+      doc.setTextColor(...(it.color||PURPLE)); doc.setFontSize(15); doc.setFont(undefined,'normal');
       doc.text(String(it.value), x+w/2, y+9.5, {align:'center'});
       doc.setFontSize(6.6); doc.setFont(undefined,'normal'); doc.setTextColor(...GRAY);
       const ll=doc.splitTextToSize(it.label,w-4);
@@ -1654,7 +1658,7 @@ function gerarPDFResumo(setoresSelecionados){
     checkBreak(8);
     let x=margin;
     doc.setFillColor(...PURPLE); doc.rect(margin,y,pageW-margin*2,6.2,'F');
-    doc.setTextColor(255,255,255); doc.setFontSize(7.3); doc.setFont(undefined,'bold');
+    doc.setTextColor(255,255,255); doc.setFontSize(7.6); doc.setFont(undefined,'normal');
     headers.forEach((h,i)=>{ doc.text(h,x+2,y+4.2); x+=colW[i]; });
     y+=6.2;
     doc.setFont(undefined,'normal'); doc.setTextColor(...TINTA); doc.setFontSize(8);
@@ -1698,7 +1702,7 @@ function gerarPDFResumo(setoresSelecionados){
     {label:'Geradas s/ justif.',value:hhmm(totGerada),color:ORANGE}
   ]);
 
-  secTitle('Panorama geral','🎯');
+  secTitle('Panorama geral',PURPLE);
   const setoresCriticos=an.filter(a=>a.aderencia!=null&&a.aderencia<60);
   const setoresSaudaveis=an.filter(a=>a.aderencia!=null&&a.aderencia>=80);
   paragraph(`No recorte analisado, ${an.length} setor(es) somam ${totHead} colaboradores com aderência geral de ${aderGeral}%. `+
@@ -1706,7 +1710,7 @@ function gerarPDFResumo(setoresSelecionados){
     `${setoresCriticos.length?setoresCriticos.length+' setor(es) estão em estado crítico (aderência abaixo de 60%). ':''}`+
     `${setoresSaudaveis.length?setoresSaudaveis.length+' setor(es) estão saudáveis (aderência ≥80%).':''}`);
 
-  secTitle('Principais insights','💡');
+  secTitle('Principais insights',ORANGE);
   const piorSetor=[...an].filter(a=>a.aderencia!=null).sort((x,y)=>x.aderencia-y.aderencia)[0];
   const piorPP=[...an].sort((x,y)=>y.perdidaPorPessoa-x.perdidaPorPessoa)[0];
   const cntReinc={}; base.filter(r=>setoresSelecionados.includes(r.setor)&&(r.situacao==='nok'||r.situacao==='esq')).forEach(r=>{cntReinc[r.nome]=(cntReinc[r.nome]||0)+1;});
@@ -1718,12 +1722,12 @@ function gerarPDFResumo(setoresSelecionados){
   if(totEsqGeral)bullet(`${totEsqGeral} caso(s) de esquecimento de batida de ponto — não penalizam horas, mas indicam falha de disciplina de registro a ser reforçada com a equipe.`,PURPLE);
   if(!piorSetor&&!reincGeral.length)bullet('Nenhum ponto crítico identificado no recorte — equipe em bom nível de conformidade.',GREEN);
 
-  secTitle('Setores no recorte','📊');
+  secTitle('Setores no recorte',PURPLE);
   miniTable(['Setor','Equipe','Aderência','H. Perdidas','Perdida/Pessoa','Geradas S/J'],
     [...an].sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa).map(a=>[a.setor,a.headcount+'p',a.aderencia==null?'—':a.aderencia+'%',hhmm(a.perdida),hhmm(Math.round(a.perdidaPorPessoa)),hhmm(a.gerada)]),
     [45,20,25,30,32,30]);
 
-  secTitle('Quem puxa cada indicador','🔍');
+  secTitle('Quem puxa cada indicador',PURPLE);
   paragraph('Ranking de quem mais contribui para cada tipo de ocorrência — use para embasar conversas específicas com cada liderança de setor.');
   const baseSel=base.filter(r=>setoresSelecionados.includes(r.setor));
   ['Atraso entrada','Almoço acima','Saída antecipada'].forEach(tipo=>{
@@ -1745,7 +1749,7 @@ function gerarPDFResumo(setoresSelecionados){
     const top=Object.entries(porPessoa).sort((x,y)=>y[1].min-x[1].min).slice(0,5);
     if(top.length){
       checkBreak(8);
-      doc.setFontSize(9.3); doc.setFont(undefined,'bold'); doc.setTextColor(...PURPLE);
+      doc.setFontSize(10); doc.setFont(undefined,'normal'); doc.setTextColor(...PURPLE);
       doc.text(tipo, margin, y); y+=5;
       miniTable(['Colaborador','Setor','Ocorr.','Total'],
         top.map(([n,v])=>[n,v.setor,v.n,hhmm(v.min)]), [60,50,20,pageW-margin*2-60-50-20]);
@@ -1754,8 +1758,8 @@ function gerarPDFResumo(setoresSelecionados){
 
   /* ---------- UMA PÁGINA POR SETOR ---------- */
   an.sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa).forEach(a=>{
-    const semaforo=a.aderencia==null?'⚪':a.aderencia>=80?'🟢':a.aderencia>=60?'🟡':'🔴';
-    novaPagina(semaforo+' '+a.setor, a.headcount+' colaboradores · aderência '+(a.aderencia==null?'—':a.aderencia+'%'));
+    const corSem=a.aderencia==null?GRAY:a.aderencia>=80?GREEN:a.aderencia>=60?YELLOW_TXT:RED;
+    novaPagina(a.setor, a.headcount+' colaboradores · aderência '+(a.aderencia==null?'—':a.aderencia+'%'), corSem);
 
     kpiRow([
       {label:'Equipe',value:a.headcount},
@@ -1764,13 +1768,13 @@ function gerarPDFResumo(setoresSelecionados){
       {label:'Geradas s/ justif.',value:hhmm(a.gerada),color:ORANGE}
     ]);
 
-    secTitle('Diagnóstico','🩺');
+    secTitle('Diagnóstico',PURPLE);
     if(a.aderencia==null)paragraph('Sem registros de presença suficientes para avaliar este setor no recorte.');
     else if(a.aderencia>=80)paragraph(`Setor saudável. Aderência de ${a.aderencia}% está dentro do padrão de excelência (≥80%). Recomenda-se manter o acompanhamento de rotina, sem necessidade de ação corretiva imediata.`,undefined);
     else if(a.aderencia>=60)paragraph(`Setor em zona de atenção. Aderência de ${a.aderencia}% pede um alinhamento coletivo com a equipe, com foco no problema dominante: ${a.problema}.`,undefined);
     else paragraph(`Setor crítico. Apenas ${a.aderencia}% de aderência. Recomenda-se reunião com a liderança do setor, revisão de causas estruturais (escala, transporte, dimensionamento) e plano de ação com prazo definido.`,undefined);
 
-    secTitle('Oportunidades de melhoria','🎯');
+    secTitle('Oportunidades de melhoria',PURPLE);
     const oportunidades=[];
     if(a.problema==='Atraso entrada')oportunidades.push('Revisar compatibilidade entre horário de início e opções de transporte/deslocamento da equipe.');
     if(a.problema==='Almoço extra')oportunidades.push('Reforçar o limite de tempo de almoço em reunião rápida com a equipe; avaliar se o horário de pico do refeitório está gerando atraso sistêmico.');
@@ -1781,12 +1785,12 @@ function gerarPDFResumo(setoresSelecionados){
     if(!oportunidades.length)oportunidades.push('Nenhuma oportunidade crítica identificada — setor operando dentro do esperado.');
     oportunidades.forEach(o=>bullet(o,ORANGE));
 
-    secTitle('Sugestão de alinhamento','💬');
+    secTitle('Sugestão de alinhamento',PURPLE);
     if(a.aderencia!=null&&a.aderencia<60)paragraph('Sugere-se uma reunião formal com a liderança do setor esta semana, apresentando os dados deste relatório e definindo um plano de ação com responsável e prazo. Casos individuais reincidentes (ver pessoas focais abaixo) devem ser tratados em conversas separadas.');
     else if(a.aderencia!=null&&a.aderencia<80)paragraph('Um alinhamento coletivo rápido (5-10min em reunião de equipe) reforçando a regra e o problema dominante costuma resolver desvios neste patamar, sem necessidade de medida individual generalizada.');
     else paragraph('Setor não demanda alinhamento coletivo no momento. Reconhecimento da equipe pelo bom desempenho é uma ação de baixo custo e alto retorno.');
 
-    secTitle('Pessoas focais para feedback','🚨');
+    secTitle('Pessoas focais para feedback',RED);
     const focais=pessoasFocais(a.setor,base);
     if(focais.length){
       miniTable(['Colaborador','Ocorr.','H. Perdidas','Ação sugerida'],
