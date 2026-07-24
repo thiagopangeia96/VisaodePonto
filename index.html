@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pangeia 96 · Painel de Ponto & Banco de Horas</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{
+  --roxo:#6B21C7; --roxo-esc:#4A148C; --roxo-claro:#B794E6; --roxo-lav:#EDE4FB;
+  --roxo-lav2:#F6F0FE; --amarelo:#F5C542; --amarelo-esc:#E0A82E;
+  --verde:#2E9E5B; --verde-bg:#E6F6EC; --vermelho:#D64550; --vermelho-bg:#FCEAEC;
+  --laranja:#E8873B; --laranja-bg:#FDF0E4;
+  --tinta:#2A1B3D; --cinza:#8B7FA3; --linha:#E4DAF2; --branco:#fff;
+  --sombra:0 4px 20px rgba(74,20,140,.10); --sombra-lg:0 12px 40px rgba(74,20,140,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  font-family:'Inter',-apple-system,'Segoe UI',Roboto,sans-serif;
+  background:var(--roxo-lav2); color:var(--tinta); line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3{font-weight:800;letter-spacing:-.02em}
+.wrap{max-width:1400px;margin:0 auto;padding:0 24px}
+
+/* HEADER */
+header{
+  background:linear-gradient(135deg,var(--roxo) 0%,var(--roxo-esc) 100%);
+  color:#fff;padding:22px 0;position:relative;overflow:hidden;
+}
+header::after{
+  content:"";position:absolute;right:-40px;top:-40px;width:220px;height:220px;
+  background:radial-gradient(circle,rgba(245,197,66,.25),transparent 70%);border-radius:50%;
+}
+.hd{display:flex;align-items:center;gap:16px;position:relative;z-index:1}
+.urso{width:52px;height:52px;border-radius:50%;background:var(--roxo-claro);
+  display:flex;align-items:center;justify-content:center;font-size:28px;
+  box-shadow:0 4px 12px rgba(0,0,0,.2);flex-shrink:0}
+.hd h1{font-size:1.5rem;line-height:1.1}
+.hd .tag{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.14em;
+  color:var(--amarelo);display:block;margin-bottom:2px}
+.hd-sub{margin-left:auto;text-align:right;font-size:.8rem;opacity:.9}
+
+/* TABS */
+.tabs{display:flex;gap:6px;background:var(--roxo-esc);padding:0}
+.tabs .wrap{display:flex;gap:6px;padding-top:0;padding-bottom:0}
+.tab{
+  background:transparent;border:none;color:rgba(255,255,255,.65);
+  padding:14px 26px;font-size:.92rem;font-weight:700;cursor:pointer;
+  border-bottom:3px solid transparent;transition:.18s;font-family:inherit;
+}
+.tab:hover{color:#fff}
+.tab.on{color:#fff;border-bottom-color:var(--amarelo)}
+
+/* UPLOAD ZONE */
+.dropzone{
+  background:#fff;border:2.5px dashed var(--roxo-claro);border-radius:20px;
+  padding:44px 24px;text-align:center;cursor:pointer;transition:.2s;margin:28px 0;
+}
+.dropzone:hover,.dropzone.drag{border-color:var(--roxo);background:var(--roxo-lav2)}
+.dropzone .ic{font-size:44px;margin-bottom:10px}
+.dropzone h3{font-size:1.15rem;color:var(--roxo);margin-bottom:6px}
+.dropzone p{color:var(--cinza);font-size:.9rem}
+.dropzone .btn{margin-top:16px}
+
+.btn{
+  display:inline-flex;align-items:center;gap:8px;background:var(--roxo);color:#fff;
+  border:none;padding:12px 22px;border-radius:999px;font-weight:700;font-size:.9rem;
+  cursor:pointer;transition:.18s;font-family:inherit;
+}
+.btn:hover{background:var(--roxo-esc);transform:translateY(-1px)}
+.btn.amarelo{background:var(--amarelo);color:var(--roxo-esc)}
+.btn.amarelo:hover{background:var(--amarelo-esc)}
+.btn.ghost{background:#fff;color:var(--roxo);border:1.5px solid var(--linha)}
+.btn.ghost:hover{background:var(--roxo-lav)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+/* STATUS BANNER */
+.banner{padding:14px 18px;border-radius:14px;margin:16px 0;font-size:.9rem;font-weight:600;
+  display:flex;align-items:center;gap:10px}
+.banner.ok{background:var(--verde-bg);color:var(--verde)}
+.banner.warn{background:var(--laranja-bg);color:var(--laranja)}
+.banner.err{background:var(--vermelho-bg);color:var(--vermelho)}
+.banner.info{background:var(--roxo-lav);color:var(--roxo)}
+
+/* FILTERS */
+.filtros{background:#fff;border-radius:18px;padding:20px 22px;box-shadow:var(--sombra);
+  margin:22px 0;display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end}
+.campo{display:flex;flex-direction:column;gap:5px}
+.campo label{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--cinza)}
+.campo select,.campo input{
+  padding:9px 12px;border:1.5px solid var(--linha);border-radius:10px;font-size:.9rem;
+  font-family:inherit;background:#fff;color:var(--tinta);min-width:150px;cursor:pointer;
+}
+.campo select:focus,.campo input:focus{outline:none;border-color:var(--roxo)}
+.filtros .acoes{margin-left:auto;display:flex;gap:10px}
+
+/* KPI CARDS */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:22px 0}
+.kpi{background:#fff;border-radius:18px;padding:20px 22px;box-shadow:var(--sombra);
+  position:relative;overflow:hidden;border-left:5px solid var(--roxo)}
+.kpi.verde{border-left-color:var(--verde)}
+.kpi.verm{border-left-color:var(--vermelho)}
+.kpi.laranja{border-left-color:var(--laranja)}
+.kpi.amarelo{border-left-color:var(--amarelo)}
+.kpi .n{font-size:2.4rem;font-weight:800;line-height:1;letter-spacing:-.03em}
+.kpi .l{font-size:.8rem;color:var(--cinza);font-weight:600;margin-top:6px}
+.kpi .sub{font-size:.72rem;color:var(--cinza);margin-top:3px}
+.kpi.verde .n{color:var(--verde)} .kpi.verm .n{color:var(--vermelho)}
+.kpi.laranja .n{color:var(--laranja)} .kpi.amarelo .n{color:var(--amarelo-esc)}
+.kpi .n{color:var(--roxo)}
+
+/* GRID / CARDS */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin:22px 0}
+.grid2>.card{margin:0}
+@media(max-width:900px){.grid2{grid-template-columns:1fr}}
+.card{background:#fff;border-radius:18px;padding:22px;box-shadow:var(--sombra);margin:22px 0}
+.card h3{font-size:1.05rem;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+.card .hint{font-size:.8rem;color:var(--cinza);margin-bottom:16px}
+.chart-box{position:relative;height:300px}
+
+/* INSIGHTS */
+.insight{display:flex;gap:14px;padding:14px 16px;border-radius:14px;margin-bottom:10px;
+  background:var(--roxo-lav2);border-left:4px solid var(--roxo)}
+.insight.crit{background:var(--vermelho-bg);border-left-color:var(--vermelho)}
+.insight.warn{background:var(--laranja-bg);border-left-color:var(--laranja)}
+.insight.good{background:var(--verde-bg);border-left-color:var(--verde)}
+.insight .ic{font-size:22px;flex-shrink:0}
+.insight .txt{font-size:.88rem}
+.insight .txt b{font-weight:800}
+.insight .txt .meta{color:var(--cinza);font-size:.8rem;margin-top:2px}
+
+/* WATCHLIST chips */
+.watch{display:flex;flex-wrap:wrap;gap:10px}
+.wchip{background:#fff;border:1.5px solid var(--linha);border-radius:14px;padding:12px 16px;
+  display:flex;flex-direction:column;gap:2px;min-width:180px}
+.wchip.crit{border-color:var(--vermelho);background:var(--vermelho-bg)}
+.wchip.warn{border-color:var(--laranja);background:var(--laranja-bg)}
+.wchip .nm{font-weight:800;font-size:.9rem}
+.wchip .dt{font-size:.76rem;color:var(--cinza)}
+.wchip .bd{font-size:.78rem;font-weight:700;margin-top:4px}
+.wchip.crit .bd{color:var(--vermelho)} .wchip.warn .bd{color:var(--laranja)}
+
+/* TABLE */
+.tbl-wrap{overflow-x:auto;border-radius:14px;border:1px solid var(--linha)}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{background:var(--roxo);color:#fff;padding:11px 12px;text-align:left;font-weight:700;
+  position:sticky;top:0;white-space:nowrap;font-size:.78rem;text-transform:uppercase;letter-spacing:.03em}
+td{padding:10px 12px;border-bottom:1px solid var(--linha);white-space:nowrap}
+tr:nth-child(even) td{background:var(--roxo-lav2)}
+tr:hover td{background:var(--roxo-lav)}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;font-size:.74rem;font-weight:700}
+.pill.ok{background:var(--verde-bg);color:var(--verde)}
+.pill.nok{background:var(--vermelho-bg);color:var(--vermelho)}
+.pill.aus{background:var(--laranja-bg);color:var(--laranja)}
+.pill.horista{background:var(--amarelo);color:var(--roxo-esc)}
+.late{color:var(--vermelho);font-weight:700}
+.dt-badge{font-weight:700;font-size:.78rem;padding:2px 8px;border-radius:6px;background:var(--roxo-lav);color:var(--roxo)}
+
+.empty{text-align:center;padding:60px 20px;color:var(--cinza)}
+.empty .ic{font-size:56px;margin-bottom:14px;opacity:.5}
+.hide{display:none!important}
+.spin{display:inline-block;width:16px;height:16px;border:2.5px solid rgba(255,255,255,.3);
+  border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;vertical-align:middle}
+@keyframes sp{to{transform:rotate(360deg)}}
+footer{text-align:center;padding:30px;color:var(--cinza);font-size:.8rem}
+.sec-title{font-size:1.3rem;margin:28px 0 4px;display:flex;align-items:center;gap:10px}
+.sec-sub{color:var(--cinza);font-size:.9rem;margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap hd">
+    <div class="urso">🐻</div>
+    <div>
+      <span class="tag">Pangeia 96 · Operações</span>
+      <h1>Painel de Ponto &amp; Banco de Horas</h1>
+    </div>
+    <div class="hd-sub" id="baseStatus">carregando base…</div>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="wrap">
+    <button class="tab on" data-tab="ponto">⏱ Conformidade de Ponto</button>
+    <button class="tab" data-tab="banco">🏦 Banco de Horas</button>
+  </div>
+</nav>
+
+<div class="wrap">
+
+<!-- ===================== ABA PONTO ===================== -->
+<section id="tab-ponto">
+  <div class="dropzone" id="dzPonto">
+    <div class="ic">📥</div>
+    <h3>Solte aqui o relatório de Folha de Ponto (Solides)</h3>
+    <p>Arquivo <b>.xls</b> exportado do Solides · ou clique para escolher</p>
+    <button class="btn amarelo">Escolher arquivo</button>
+    <input type="file" id="filePonto" accept=".xls,.xlsx" class="hide">
+  </div>
+  <div id="pontoBanner"></div>
+
+  <div id="pontoContent" class="hide">
+    <div class="filtros">
+      <div class="campo"><label>Data</label><select id="fData"><option value="">Todas</option></select></div>
+      <div class="campo"><label>Setor</label><select id="fSetor"><option value="">Todos</option></select></div>
+      <div class="campo"><label>Sub área</label><select id="fSub"><option value="">Todas</option></select></div>
+      <div class="campo"><label>Situação</label><select id="fStatus">
+        <option value="">Todas</option><option value="ok">✅ Conforme</option>
+        <option value="nok">⚠️ Irregular</option><option value="aus">📋 Ausente</option></select></div>
+      <div class="campo"><label>Buscar colaborador</label><input type="text" id="fNome" placeholder="digite um nome…"></div>
+      <div class="acoes">
+        <button class="btn ghost" id="btnLimpar">Limpar filtros</button>
+        <button class="btn amarelo" id="btnExportPonto">⬇ Exportar Excel</button>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpisPonto"></div>
+
+    <h2 class="sec-title">💡 Insights &amp; Recorrências</h2>
+    <p class="sec-sub">Padrões detectados no período filtrado — o que merece sua atenção.</p>
+    <div class="card"><div id="insightsPonto"></div></div>
+
+    <h2 class="sec-title">🔍 Colaboradores para acompanhar de perto</h2>
+    <p class="sec-sub">Reincidência de atrasos ou não conformidades no período.</p>
+    <div class="card"><div class="watch" id="watchPonto"></div></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>📊 Conformidade por setor</h3>
+        <p class="hint">Distribuição de registros conformes vs. irregulares.</p>
+        <div class="chart-box"><canvas id="chSetor"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>🕐 Tipo de ocorrência</h3>
+        <p class="hint">Onde estão concentradas as irregularidades.</p>
+        <div class="chart-box"><canvas id="chTipo"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📋 Registros detalhados</h3>
+      <p class="hint">Filtre pela coluna Data ou use os filtros acima. Vermelho = fora da regra.</p>
+      <div class="tbl-wrap"><table id="tblPonto"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== ABA BANCO ===================== -->
+<section id="tab-banco" class="hide">
+  <div class="dropzone" id="dzBanco">
+    <div class="ic">🏦</div>
+    <h3>Solte aqui o relatório de Banco de Horas (Solides)</h3>
+    <p>Arquivo <b>.xls</b> "RelatorioBancoHoras" · ou clique para escolher</p>
+    <button class="btn amarelo">Escolher arquivo</button>
+    <input type="file" id="fileBanco" accept=".xls,.xlsx" class="hide">
+  </div>
+  <div id="bancoBanner"></div>
+
+  <div id="bancoContent" class="hide">
+    <div class="filtros">
+      <div class="campo"><label>Setor</label><select id="bSetor"><option value="">Todos</option></select></div>
+      <div class="campo"><label>Sub área</label><select id="bSub"><option value="">Todas</option></select></div>
+      <div class="campo"><label>Saldo</label><select id="bSaldo">
+        <option value="">Todos</option><option value="pos">⬆ Positivo</option>
+        <option value="neg">⬇ Negativo</option></select></div>
+      <div class="campo"><label>Buscar colaborador</label><input type="text" id="bNome" placeholder="digite um nome…"></div>
+      <div class="acoes">
+        <button class="btn ghost" id="bLimpar">Limpar filtros</button>
+        <button class="btn amarelo" id="btnExportBanco">⬇ Exportar Excel</button>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpisBanco"></div>
+
+    <h2 class="sec-title">💡 Insights de Banco de Horas</h2>
+    <p class="sec-sub">Saldos extremos e concentração por área.</p>
+    <div class="card"><div id="insightsBanco"></div></div>
+
+    <div class="grid2">
+      <div class="card">
+        <h3>📊 Saldo líquido por setor</h3>
+        <p class="hint">Superávit (verde) vs. déficit (vermelho) de horas.</p>
+        <div class="chart-box"><canvas id="chBancoSetor"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>🏆 Maiores saldos positivos</h3>
+        <p class="hint">Candidatos a abatimento via folga.</p>
+        <div class="chart-box"><canvas id="chBancoTop"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>📋 Ranking completo</h3>
+      <p class="hint">Do maior para o menor saldo acumulado.</p>
+      <div class="tbl-wrap"><table id="tblBanco"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<footer>🐻 Pangeia 96 · Painel operacional · Base de colaboradores sincronizada via Google Sheets</footer>
+
+<script>
+/* ================= CONFIG ================= */
+// Cole aqui a URL CSV gerada pelo Apps Script (publicarComoCSV).
+// Enquanto estiver vazio, o dashboard usa a base embutida abaixo.
+const BASE_CSV_URL = "";
+
+/* Base embutida (fallback caso o CSV não esteja configurado) */
+const BASE_EMBUTIDA = [{"nome": "João Lucas Idelfonso da Silva Rosa", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "HORISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Dayane da Silva Souza", "setor": "ACABAMENTO", "subarea": "ASSISTENTE DE SUP.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Emelly Danielly Marques da Silva", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Morgana Neres Pires", "setor": "PRODUÇÃO", "subarea": "ETIQUETAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Julia Ferreira dos Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lilianis Rielo Aranda", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Manuella Fairness", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kevily Cristina Brito da Silva Ribeiro", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Laura Ferreira Teodoro", "setor": "LOGÍSTICA", "subarea": "AFERIÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Heitor Oliveira de Souza", "setor": "PRODUÇÃO", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Aline Sousa de Oliveira", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Karina Saraíva Nascimento", "setor": "PRODUÇÃO", "subarea": "CONTAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fabíola Nita Costa Carvalho", "setor": "LOGÍSTICA", "subarea": "ANALISTA LINX", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Silas Gabriel da Silva Santos", "setor": "LOGÍSTICA", "subarea": "ANALISTA ESTOQUE", "tipo": "MENSALISTA", "entrada": "07:00", "saida": "17:00"}, {"nome": "Cayk de Souza Pereira", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda Dias do Nascimento", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Wanderson da Silva Miranda", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Aldiana Baia dos Santos", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Paulo Henrique Santos Souza", "setor": "PRODUÇÃO", "subarea": "MOTORISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kethelyn Eliane da Silva Lopes", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriel Santos Souza", "setor": "LOGÍSTICA", "subarea": "SUPERVISÃO OP.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "João Lucas de Sa Castro", "setor": "MARKETING", "subarea": "MARKETING", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lyriel Marcelle da Silva Soares", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "José Antonio de Sousa Gomes", "setor": "PRODUÇÃO", "subarea": "PCP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gesiel Lopes dos Santos", "setor": "PRODUÇÃO", "subarea": "MOTORISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kelly Saraiva Nascimento", "setor": "ACABAMENTO", "subarea": "BOTÃO/PASSADORIA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Geisiane Sousa Leite", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pedro Augusto Pereira Costa", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kevyn Lucas Menezes de Sousa", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Samila Victoria Pereira de Oliveira", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Geovane Pereira de Brito", "setor": "PRODUÇÃO", "subarea": "CONTAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vitor Enrik de Melo Lopes", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Karla Santos Bezerra", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Beatriz de Souza Oliveira", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Carolina Gadelha Borges Gonçalves", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Emilly Monielly Rodrigues de Jesus", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Irys Raiane Trindade Gomes", "setor": "PRODUÇÃO", "subarea": "ETIQUETAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pamela Jessica Pilicie", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ramilla Ligia Moura", "setor": "PRODUÇÃO", "subarea": "COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Eduardo Badias da Vitoria", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Josiane Pedrosa de Oliveira", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE PCP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "JESSICA POLIANA SOARES DOS SANTOS LOPES", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Izabella Santos Farias Ferreira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Aparecida Taveira da Silva", "setor": "ACABAMENTO", "subarea": "TROCAS E DEVOLUÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Rebeca Villany de Andrade", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Stephane Elizabeth de Oliveira Silva", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Luana Cardoso Lima", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria de Lourdes Gomes de Oliveira", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pedro Meireles Assunção Silva", "setor": "LOGÍSTICA", "subarea": "EXPEDIÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "PAULO HENRIQUE CAVALCANTE DE SOUZA", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Hevellyn Victorya Pereira Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kaylane Pereira Bispo", "setor": "LOGÍSTICA", "subarea": "ANALISTA TROCAS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "16:30"}, {"nome": "Vithorya Cristina Carneiro Ribeiro Reco", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ramilly Augusta Moura Macedo", "setor": "PRODUÇÃO", "subarea": "COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Giovana de Almeida Gouvea", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Brenda Ferreira Romao", "setor": "GENTE E GESTÃO", "subarea": "DP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriela Alves Machado", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lorraine Moreira", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "MARIA CLARA VELOSO CAMARA", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Stella Lima Brandão", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriela Moreira e Silva", "setor": "ESTILO", "subarea": "ESTILISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ellen Costa Oliveira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriel da Silva Santos Costa", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Grayce Kelly Lopes da Silva", "setor": "GENTE E GESTÃO", "subarea": "RECEPÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda Martins Bastos", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "KAUAN COELHO MARTINS", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Elizamar Soares Fagundes", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "MATHEUS DE CASTRO OLIVEIRA", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mayra Michelly Oliveira de Oliveira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabrielly Rocha Mendes Mota", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gleicilene Almeida Santos", "setor": "PRODUÇÃO", "subarea": "MODELISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "CAWAN HENRIQUE CESAR SILVA SOUSA", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "ISABELLA GUIMARAES FERREIRA", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Souza Silva", "setor": "LOGÍSTICA", "subarea": "TROCAS E DEVOLUÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Beatriz Ribeiro de Souza", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Valdeci Matias da Silva", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vitória Protti Eid", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE ENG. PROD.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Carolina Pinheiro Cardoso", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mariana de Assis Ferreira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda de Oliveira Benevides Lopes", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Araujo da Silva", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Elissa Santos Garcia", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Isaac David Figueiredo Cunha", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Marcelo Junior Pinheiro Cardoso", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vinicius Brandao de Oliveira", "setor": "LOGÍSTICA", "subarea": "FISCAL DE PÁTIO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Valkiria Rodrigues Meira", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kattely Karoline Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Francisca de Sousa Santos", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Igor Augusto Ferreira Sampaio", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Isabella Oliveira de Jesus", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Andreia Marques Pinto", "setor": "ADMINISTRATIVO", "subarea": "COMPRAS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mateus Henrique da Silva", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}];
+</script>
+<script>
+/* ============================================================
+   PANGEIA 96 — Painel de Ponto & Banco de Horas
+   ============================================================ */
+
+const TOL = 10; // tolerância em minutos
+let BASE = [];          // base de colaboradores {nome,setor,subarea,tipo,entrada,saida}
+let PONTO = [];         // registros de ponto processados
+let BANCO = [];         // registros de banco de horas
+let charts = {};
+
+/* ---------- utilidades ---------- */
+const norm = s => (s||'').toString().trim().toLowerCase()
+  .normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const toMin = t => { if(!t) return null; const neg=t[0]==='-'; const p=t.replace('-','').split(':');
+  const m=(+p[0])*60+(+p[1]); return isNaN(m)?null:(neg?-m:m); };
+const hhmm = m => { if(m==null) return '—'; const n=m<0; m=Math.abs(m);
+  return (n?'-':'')+String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); };
+const el = id => document.getElementById(id);
+
+/* base lookup por nome (aproxima acentos/caixa) */
+function findBase(nome){
+  const n = norm(nome);
+  let hit = BASE.find(b => norm(b.nome) === n);
+  if(hit) return hit;
+  // match parcial (primeiro+último nome)
+  const parts = n.split(/\s+/);
+  if(parts.length>=2){
+    const key = parts[0]+' '+parts[parts.length-1];
+    hit = BASE.find(b=>{const bn=norm(b.nome).split(/\s+/);
+      return bn[0]===parts[0] && bn[bn.length-1]===parts[parts.length-1];});
+  }
+  return hit || null;
+}
+
+/* ---------- carregar base (CSV google ou embutida) ---------- */
+async function carregarBase(){
+  const st = el('baseStatus');
+  if(BASE_CSV_URL){
+    try{
+      const r = await fetch(BASE_CSV_URL);
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      const txt = await r.text();
+      BASE = parseCSVBase(txt);
+      st.innerHTML = '🟢 Base online · '+BASE.length+' colaboradores';
+      return;
+    }catch(e){
+      st.innerHTML = '🟡 Base embutida (CSV indisponível)';
+      BASE = BASE_EMBUTIDA.slice();
+      return;
+    }
+  }
+  BASE = BASE_EMBUTIDA.slice();
+  st.innerHTML = '🟡 Base embutida · '+BASE.length+' colaboradores';
+}
+
+function parseCSVBase(txt){
+  const lines = txt.split(/\r?\n/).filter(l=>l.trim());
+  const head = lines[0].split(',').map(h=>norm(h));
+  const iN=head.indexOf('nome'), iSe=head.indexOf('setor'), iSu=head.indexOf('subarea'),
+        iT=head.indexOf('tipo'), iE=head.indexOf('entrada'), iSa=head.indexOf('saida');
+  const out=[];
+  for(let k=1;k<lines.length;k++){
+    const c = splitCSVLine(lines[k]);
+    if(!c[iN]) continue;
+    out.push({nome:c[iN].trim(), setor:(c[iSe]||'').trim(), subarea:(c[iSu]||'').trim(),
+      tipo:(c[iT]||'MENSALISTA').trim().toUpperCase(),
+      entrada:(c[iE]||'08:00').trim(), saida:(c[iSa]||'18:00').trim()});
+  }
+  return out;
+}
+function splitCSVLine(line){
+  const out=[]; let cur='',q=false;
+  for(let i=0;i<line.length;i++){const ch=line[i];
+    if(ch==='"'){q=!q;} else if(ch===','&&!q){out.push(cur);cur='';} else cur+=ch;}
+  out.push(cur); return out;
+}
+
+/* ============================================================
+   PARSE — FOLHA DE PONTO
+   ============================================================ */
+function parsePonto(rows){
+  const recs=[]; let nome=null; let anoRef=new Date().getFullYear();
+  // tentar achar ano no cabeçalho (linha "AAAA-MM-DD a AAAA-MM-DD")
+  for(let i=0;i<6&&i<rows.length;i++){
+    const raw=(rows[i]||[]).map(v=>String(v));
+    const my=raw.join(' ').match(/(20\d{2})-\d{2}-\d{2}/);
+    if(my){anoRef=+my[1];break;}
+  }
+  for(let i=0;i<rows.length;i++){
+    const vals=(rows[i]||[]).map(v=>v==null?'':String(v).trim()).filter(v=>v!=='');
+    if(vals.includes('DADOS DO COLABORADOR') && rows[i+1]){
+      const nr=(rows[i+1]||[]).map(v=>v==null?'':String(v).trim()).filter(v=>v!=='');
+      const k=nr.indexOf('Nome:'); if(k>=0&&nr[k+1]) nome=nr[k+1];
+    }
+    if(vals.length>=3){
+      // aceita "AAAA-MM-DD" (pandas) ou "DD/MM" e "DD/MM/AAAA" (xlsx.js)
+      let data=null;
+      let dm=/^(\d{4})-(\d{2})-(\d{2})/.exec(vals[0]);
+      if(dm){ data=dm[1]+'-'+dm[2]+'-'+dm[3]; }
+      else{
+        let d2=/^(\d{2})\/(\d{2})(?:\/(\d{4}))?$/.exec(vals[0]);
+        if(d2){ const ano=d2[3]||anoRef; data=ano+'-'+d2[2]+'-'+d2[1]; }
+      }
+      if(data){
+        const dia=vals[1]||'', ponto=vals[2]||'';
+        if(/\d{2}:\d{2}/.test(ponto) && ponto.includes('|')){
+          const t=(ponto.replace(/\([a-z]\)/g,'').match(/\d{2}:\d{2}/g)||[]);
+          recs.push({nome,data,dia,entrada:t[0]||null,saidaInt:t[1]||null,
+            retInt:t[2]||null,saida:t[3]||null,obs:null});
+        } else if(ponto && ponto!=='-' && !/\d{2}:\d{2}/.test(ponto)){
+          recs.push({nome,data,dia,entrada:null,saidaInt:null,retInt:null,saida:null,obs:ponto});
+        }
+      }
+      }
+    }
+  // enriquecer com base + conformidade
+  return recs.filter(r=>r.nome).map(r=>{
+    const b=findBase(r.nome);
+    const setor=b?b.setor:'(sem cadastro)', sub=b?b.subarea:'(sem cadastro)';
+    const refE=b?b.entrada:'08:00', refS=b?b.saida:'18:00';
+    const tipo=b?b.tipo:'MENSALISTA';
+    let okE=null,dE=null, okR=null,dR=null, okS=null,dS=null;
+    if(r.entrada){const v=toMin(r.entrada),rf=toMin(refE); if(v!=null&&rf!=null){dE=v-rf;okE=dE<=TOL;}}
+    if(r.retInt){const v=toMin(r.retInt),rf=toMin('13:00'); if(v!=null&&rf!=null){dR=v-rf;okR=dR<=TOL;}}
+    if(r.saida){const v=toMin(r.saida),rf=toMin(refS); if(v!=null&&rf!=null){dS=v-rf;okS=dS>=-TOL;}}
+    const flags=[];
+    if(okE===false) flags.push('Entrada '+(dE>0?'+':'')+dE+'min');
+    if(okR===false) flags.push('Ret. almoço +'+dR+'min');
+    if(okS===false) flags.push('Saída '+Math.abs(dS)+'min antes');
+    let situacao='ok', status='✅ Conforme';
+    if(r.obs){situacao='aus'; status='📋 '+r.obs;}
+    else if(flags.length){situacao='nok'; status='⚠️ '+flags.join(' · ');}
+    return {...r,setor,sub,tipo,refE,refS,okE,dE,okR,dR,okS,dS,flags,situacao,status};
+  });
+}
+
+/* ============================================================
+   PARSE — BANCO DE HORAS
+   ============================================================ */
+function parseBanco(rows){
+  const recs=[];
+  for(let i=0;i<rows.length;i++){
+    const vals=(rows[i]||[]).map(v=>v==null?'':String(v).trim()).filter(v=>v!=='');
+    const next=(rows[i+1]||[]).map(v=>v==null?'':String(v).trim()).filter(v=>v!=='');
+    if(next[0] && next[0].startsWith('Competência:') && vals.length===1){
+      const nome=vals[0]; let saldo=null;
+      for(let o=2;o<30 && i+o<rows.length;o++){
+        const rv=(rows[i+o]||[]).map(v=>v==null?'':String(v).trim()).filter(v=>v!=='');
+        for(let j=0;j<rv.length;j++){
+          if(rv[j].includes('Saldo Acumulado')){ if(rv[j+1]) saldo=rv[j+1]; break; }
+        }
+        if(saldo) break;
+      }
+      const b=findBase(nome);
+      recs.push({nome, saldo:saldo||'00:00', mins:toMin(saldo)||0,
+        setor:b?b.setor:'(sem cadastro)', sub:b?b.subarea:'(sem cadastro)',
+        tipo:b?b.tipo:'MENSALISTA'});
+    }
+  }
+  return recs.sort((a,b)=>b.mins-a.mins);
+}
+
+/* ============================================================
+   LEITURA DE ARQUIVO
+   ============================================================ */
+function lerArquivo(file, cb){
+  const fr=new FileReader();
+  fr.onload=e=>{
+    const data=new Uint8Array(e.target.result);
+    const wb=XLSX.read(data,{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
+    cb(rows);
+  };
+  fr.readAsArrayBuffer(file);
+}
+
+/* ============================================================
+   RENDER — PONTO
+   ============================================================ */
+function pontoFiltrado(){
+  const d=el('fData').value, se=el('fSetor').value, su=el('fSub').value,
+        st=el('fStatus').value, nm=norm(el('fNome').value);
+  return PONTO.filter(r=>
+    (!d||r.data===d) && (!se||r.setor===se) && (!su||r.sub===su) &&
+    (!st||r.situacao===st) && (!nm||norm(r.nome).includes(nm)));
+}
+
+function renderPonto(){
+  const dados=pontoFiltrado();
+  // KPIs
+  const ok=dados.filter(r=>r.situacao==='ok').length;
+  const nok=dados.filter(r=>r.situacao==='nok').length;
+  const aus=dados.filter(r=>r.situacao==='aus').length;
+  const taxa=dados.length?Math.round(ok/(ok+nok||1)*100):0;
+  el('kpisPonto').innerHTML=`
+    <div class="kpi"><div class="n">${dados.length}</div><div class="l">Registros</div><div class="sub">no período filtrado</div></div>
+    <div class="kpi verde"><div class="n">${ok}</div><div class="l">✅ Conformes</div><div class="sub">${taxa}% de conformidade</div></div>
+    <div class="kpi verm"><div class="n">${nok}</div><div class="l">⚠️ Irregulares</div><div class="sub">fora da tolerância (±${TOL}min)</div></div>
+    <div class="kpi laranja"><div class="n">${aus}</div><div class="l">📋 Ausentes/Obs</div><div class="sub">falta, folga, atestado…</div></div>`;
+
+  renderInsightsPonto(dados);
+  renderWatchPonto();
+  renderChartsPonto(dados);
+  renderTablePonto(dados);
+}
+
+function renderInsightsPonto(dados){
+  const box=el('insightsPonto'); const ins=[];
+  const nok=dados.filter(r=>r.situacao==='nok');
+  // recorrência por colaborador (em todo o PONTO, não só filtrado)
+  const cnt={}; PONTO.filter(r=>r.situacao==='nok').forEach(r=>{cnt[r.nome]=(cnt[r.nome]||0)+1;});
+  const reincidentes=Object.entries(cnt).filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1]);
+
+  if(reincidentes.length){
+    ins.push({c:'crit',ic:'🔁',t:`<b>${reincidentes.length} colaborador(es) reincidente(s)</b> com 2+ irregularidades no período.
+      Destaque: <b>${reincidentes[0][0]}</b> (${reincidentes[0][1]}x).
+      <div class="meta">Recomenda-se conversa individual de alinhamento.</div>`});
+  }
+  // tipo de ocorrência dominante
+  let cE=0,cR=0,cS=0;
+  nok.forEach(r=>{if(r.okE===false)cE++;if(r.okR===false)cR++;if(r.okS===false)cS++;});
+  const maxTipo=Math.max(cE,cR,cS);
+  if(maxTipo>0){
+    const label=maxTipo===cR?'atraso no retorno do almoço':maxTipo===cE?'atraso na entrada':'saída antecipada';
+    ins.push({c:'warn',ic:'⏰',t:`A ocorrência mais frequente é <b>${label}</b> (${maxTipo} registros).
+      <div class="meta">Entrada: ${cE} · Retorno almoço: ${cR} · Saída: ${cS}</div>`});
+  }
+  // setor com pior conformidade
+  const porSetor={};
+  dados.forEach(r=>{if(!porSetor[r.setor])porSetor[r.setor]={ok:0,nok:0};
+    if(r.situacao==='ok')porSetor[r.setor].ok++; if(r.situacao==='nok')porSetor[r.setor].nok++;});
+  const setorPior=Object.entries(porSetor).filter(([,v])=>v.nok+v.ok>=3)
+    .map(([s,v])=>[s,v.nok/(v.nok+v.ok)]).sort((a,b)=>b[1]-a[1])[0];
+  if(setorPior && setorPior[1]>0){
+    ins.push({c:'warn',ic:'🏭',t:`Setor com maior taxa de irregularidade: <b>${setorPior[0]}</b>
+      (${Math.round(setorPior[1]*100)}% dos registros fora da regra).`});
+  }
+  // atrasos extremos (provável erro de batida)
+  const extremos=dados.filter(r=>(r.dR&&r.dR>120)||(r.dE&&r.dE>120));
+  if(extremos.length){
+    ins.push({c:'crit',ic:'🚨',t:`<b>${extremos.length} registro(s) com desvio acima de 2h</b> —
+      provável esquecimento ou erro de batida no relógio.
+      <div class="meta">Ex.: ${extremos.slice(0,3).map(r=>r.nome).join(', ')}</div>`});
+  }
+  // positivo
+  if(dados.length && !nok.length){
+    ins.push({c:'good',ic:'🎉',t:`<b>Nenhuma irregularidade</b> no recorte atual. Equipe em dia com os horários!`});
+  }
+  if(!ins.length){
+    ins.push({c:'',ic:'ℹ️',t:'Sem dados suficientes para gerar insights neste filtro.'});
+  }
+  box.innerHTML=ins.map(x=>`<div class="insight ${x.c}"><div class="ic">${x.ic}</div><div class="txt">${x.t}</div></div>`).join('');
+}
+
+function renderWatchPonto(){
+  const box=el('watchPonto');
+  const cnt={};
+  PONTO.filter(r=>r.situacao==='nok').forEach(r=>{
+    if(!cnt[r.nome]) cnt[r.nome]={n:0,setor:r.setor,sub:r.sub,ocorr:[]};
+    cnt[r.nome].n++; cnt[r.nome].ocorr.push((r.data.slice(8,10)+'/'+r.data.slice(5,7)));
+  });
+  const arr=Object.entries(cnt).sort((a,b)=>b[1].n-a[1].n);
+  if(!arr.length){box.innerHTML='<p style="color:var(--cinza)">Nenhum colaborador com irregularidade recorrente. 👏</p>';return;}
+  box.innerHTML=arr.slice(0,12).map(([nome,d])=>{
+    const cls=d.n>=3?'crit':d.n>=2?'warn':'';
+    return `<div class="wchip ${cls}"><div class="nm">${nome}</div>
+      <div class="dt">${d.setor} · ${d.sub}</div>
+      <div class="bd">${d.n} irregularidade${d.n>1?'s':''} · ${[...new Set(d.ocorr)].join(', ')}</div></div>`;
+  }).join('');
+}
+
+function renderChartsPonto(dados){
+  // por setor (empilhado)
+  const setores=[...new Set(dados.map(r=>r.setor))].sort();
+  const okArr=setores.map(s=>dados.filter(r=>r.setor===s&&r.situacao==='ok').length);
+  const nokArr=setores.map(s=>dados.filter(r=>r.setor===s&&r.situacao==='nok').length);
+  const ausArr=setores.map(s=>dados.filter(r=>r.setor===s&&r.situacao==='aus').length);
+  mkChart('chSetor','bar',{labels:setores,datasets:[
+    {label:'Conforme',data:okArr,backgroundColor:'#2E9E5B'},
+    {label:'Irregular',data:nokArr,backgroundColor:'#D64550'},
+    {label:'Ausente',data:ausArr,backgroundColor:'#E8873B'}]},
+    {scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}});
+
+  // tipo de ocorrência (doughnut)
+  let cE=0,cR=0,cS=0;
+  dados.filter(r=>r.situacao==='nok').forEach(r=>{
+    if(r.okE===false)cE++;if(r.okR===false)cR++;if(r.okS===false)cS++;});
+  mkChart('chTipo','doughnut',{labels:['Atraso entrada','Atraso ret. almoço','Saída antecipada'],
+    datasets:[{data:[cE,cR,cS],backgroundColor:['#6B21C7','#B794E6','#F5C542']}]},
+    {cutout:'62%'});
+}
+
+function renderTablePonto(dados){
+  const cols=['Data','Dia','Setor','Sub área','Colaborador','Entrada','Saí. Interv.','Ret. Interv.','Saída','Situação'];
+  el('tblPonto').querySelector('thead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  const tb=el('tblPonto').querySelector('tbody');
+  if(!dados.length){tb.innerHTML=`<tr><td colspan="10" class="empty"><div class="ic">🔍</div>Nenhum registro para este filtro.</td></tr>`;return;}
+  tb.innerHTML=dados.map(r=>{
+    const dfmt=r.data.slice(8,10)+'/'+r.data.slice(5,7);
+    const eC=r.okE===false?'late':''; const rC=r.okR===false?'late':''; const sC=r.okS===false?'late':'';
+    let pill;
+    if(r.situacao==='ok')pill='<span class="pill ok">✅ OK</span>';
+    else if(r.situacao==='nok')pill=`<span class="pill nok">⚠️ ${r.flags.join(' · ')}</span>`;
+    else pill=`<span class="pill aus">📋 ${r.obs}</span>`;
+    const hz=r.tipo==='HORISTA'?' <span class="pill horista">horista</span>':'';
+    return `<tr>
+      <td><span class="dt-badge">${dfmt}</span></td><td>${r.dia}</td>
+      <td>${r.setor}</td><td>${r.sub}</td><td><b>${r.nome}</b>${hz}</td>
+      <td class="${eC}">${r.entrada||'—'} <small style="color:#aaa">(${r.refE})</small></td>
+      <td>${r.saidaInt||'—'}</td>
+      <td class="${rC}">${r.retInt||'—'}</td>
+      <td class="${sC}">${r.saida||'—'} <small style="color:#aaa">(${r.refS})</small></td>
+      <td>${pill}</td></tr>`;
+  }).join('');
+}
+
+/* ============================================================
+   RENDER — BANCO DE HORAS
+   ============================================================ */
+function bancoFiltrado(){
+  const se=el('bSetor').value, su=el('bSub').value, sd=el('bSaldo').value, nm=norm(el('bNome').value);
+  return BANCO.filter(r=>
+    (!se||r.setor===se)&&(!su||r.sub===su)&&
+    (!sd||(sd==='pos'?r.mins>0:r.mins<0))&&
+    (!nm||norm(r.nome).includes(nm)));
+}
+function renderBanco(){
+  const dados=bancoFiltrado();
+  const pos=dados.filter(r=>r.mins>0), neg=dados.filter(r=>r.mins<0);
+  const somaPos=pos.reduce((a,r)=>a+r.mins,0), somaNeg=neg.reduce((a,r)=>a+r.mins,0);
+  el('kpisBanco').innerHTML=`
+    <div class="kpi"><div class="n">${dados.length}</div><div class="l">Colaboradores</div></div>
+    <div class="kpi verde"><div class="n">${pos.length}</div><div class="l">⬆ Saldo positivo</div><div class="sub">total ${hhmm(somaPos)}</div></div>
+    <div class="kpi verm"><div class="n">${neg.length}</div><div class="l">⬇ Saldo negativo</div><div class="sub">total ${hhmm(somaNeg)}</div></div>
+    <div class="kpi amarelo"><div class="n">${hhmm(somaPos+somaNeg)}</div><div class="l">Saldo líquido</div><div class="sub">no recorte</div></div>`;
+  renderInsightsBanco(dados);
+  renderChartsBanco(dados);
+  renderTableBanco(dados);
+}
+function renderInsightsBanco(dados){
+  const ins=[]; const pos=dados.filter(r=>r.mins>0), neg=dados.filter(r=>r.mins<0);
+  if(pos.length){const top=pos[0];
+    ins.push({c:'good',ic:'🏆',t:`Maior saldo positivo: <b>${top.nome}</b> (${top.saldo}) — ${top.setor}/${top.sub}.
+      <div class="meta">Candidato a abatimento via folga${top.tipo==='HORISTA'?' — atenção: HORISTA, compensar via pagamento':''}.</div>`});}
+  if(neg.length){const bot=neg[neg.length-1];
+    ins.push({c:'crit',ic:'📉',t:`Maior saldo negativo: <b>${bot.nome}</b> (${bot.saldo}) — ${bot.setor}/${bot.sub}.
+      <div class="meta">Verificar faltas ou erros de registro.</div>`});}
+  // setor mais devedor
+  const porSetor={};
+  dados.forEach(r=>{porSetor[r.setor]=(porSetor[r.setor]||0)+r.mins;});
+  const arr=Object.entries(porSetor).sort((a,b)=>a[1]-b[1]);
+  if(arr.length && arr[0][1]<0){
+    ins.push({c:'warn',ic:'🏭',t:`Setor com maior déficit: <b>${arr[0][0]}</b> (${hhmm(arr[0][1])}).`});}
+  if(arr.length && arr[arr.length-1][1]>0){
+    ins.push({c:'good',ic:'✅',t:`Setor com maior superávit: <b>${arr[arr.length-1][0]}</b> (${hhmm(arr[arr.length-1][1])}).`});}
+  const horistasPos=pos.filter(r=>r.tipo==='HORISTA');
+  if(horistasPos.length){
+    ins.push({c:'warn',ic:'⚠️',t:`<b>${horistasPos.length} horista(s)</b> com saldo positivo (${horistasPos.map(h=>h.nome).join(', ')}).
+      <div class="meta">Não entram na escala de folgas — compensar via pagamento de H.E.</div>`});}
+  el('insightsBanco').innerHTML=ins.map(x=>`<div class="insight ${x.c}"><div class="ic">${x.ic}</div><div class="txt">${x.t}</div></div>`).join('')
+    ||'<div class="insight"><div class="ic">ℹ️</div><div class="txt">Sem dados neste filtro.</div></div>';
+}
+function renderChartsBanco(dados){
+  const porSetor={}; dados.forEach(r=>{porSetor[r.setor]=(porSetor[r.setor]||0)+r.mins;});
+  const setores=Object.keys(porSetor).sort((a,b)=>porSetor[b]-porSetor[a]);
+  mkChart('chBancoSetor','bar',{labels:setores,datasets:[{label:'Saldo (h)',
+    data:setores.map(s=>+(porSetor[s]/60).toFixed(1)),
+    backgroundColor:setores.map(s=>porSetor[s]>=0?'#2E9E5B':'#D64550')}]},
+    {plugins:{legend:{display:false}}});
+  const top=dados.filter(r=>r.mins>0).slice(0,10);
+  mkChart('chBancoTop','bar',{labels:top.map(r=>r.nome.split(' ')[0]+' '+(r.nome.split(' ')[1]||'')),
+    datasets:[{label:'Horas',data:top.map(r=>+(r.mins/60).toFixed(1)),backgroundColor:'#6B21C7'}]},
+    {indexAxis:'y',plugins:{legend:{display:false}}});
+}
+function renderTableBanco(dados){
+  const cols=['#','Colaborador','Setor','Sub área','Saldo','Situação'];
+  el('tblBanco').querySelector('thead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  const tb=el('tblBanco').querySelector('tbody');
+  if(!dados.length){tb.innerHTML=`<tr><td colspan="6" class="empty"><div class="ic">🔍</div>Nenhum registro.</td></tr>`;return;}
+  tb.innerHTML=dados.map((r,i)=>{
+    const pill=r.mins>0?'<span class="pill ok">⬆ Positivo</span>':r.mins<0?'<span class="pill nok">⬇ Negativo</span>':'<span class="pill">◼ Zero</span>';
+    const hz=r.tipo==='HORISTA'?' <span class="pill horista">horista</span>':'';
+    const cor=r.mins>0?'color:#2E9E5B':r.mins<0?'color:#D64550':'';
+    return `<tr><td>${i+1}</td><td><b>${r.nome}</b>${hz}</td><td>${r.setor}</td><td>${r.sub}</td>
+      <td style="font-weight:800;${cor}">${r.saldo}</td><td>${pill}</td></tr>`;
+  }).join('');
+}
+
+/* ---------- Chart helper ---------- */
+function mkChart(id,type,data,opts){
+  if(charts[id]) charts[id].destroy();
+  const base={responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{font:{family:'Inter',size:11},color:'#2A1B3D'}}},
+    scales:type==='doughnut'?{}:{x:{ticks:{font:{size:10},color:'#8B7FA3'},grid:{display:false}},
+      y:{ticks:{font:{size:10},color:'#8B7FA3'},grid:{color:'#EDE4FB'}}}};
+  charts[id]=new Chart(el(id),{type,data,options:{...base,...(opts||{}),
+    plugins:{...base.plugins,...((opts&&opts.plugins)||{})},
+    scales:{...(base.scales),...((opts&&opts.scales)||{})}}});
+}
+
+/* ---------- popular selects de filtro ---------- */
+function popSelect(sel,vals,keep){
+  const cur=keep?sel.value:'';
+  sel.innerHTML='<option value="">'+sel.options[0].text+'</option>'+
+    vals.map(v=>`<option value="${v}">${v}</option>`).join('');
+  if(keep&&vals.includes(cur)) sel.value=cur;
+}
+
+/* ============================================================
+   EXPORT EXCEL (mesmo layout do relatório)
+   ============================================================ */
+function exportPonto(){
+  const dados=pontoFiltrado();
+  const wb=XLSX.utils.book_new();
+  // aba principal
+  const head=['DATA','DIA','SETOR','SUB ÁREA','COLABORADOR','ENTRADA','REF ENTRADA','SAÍ. INTERV.','RET. INTERV.','SAÍDA','REF SAÍDA','SITUAÇÃO','OCORRÊNCIA'];
+  const body=dados.map(r=>[r.data.slice(8,10)+'/'+r.data.slice(5,7),r.dia,r.setor,r.sub,r.nome,
+    r.entrada||'',r.refE,r.saidaInt||'',r.retInt||'',r.saida||'',r.refS,
+    r.situacao==='ok'?'Conforme':r.situacao==='nok'?'Irregular':'Ausente',
+    r.obs||r.flags.join(' | ')]);
+  const ws=XLSX.utils.aoa_to_sheet([head,...body]);
+  ws['!cols']=head.map((h,i)=>({wch:i===4?34:i===12?40:14}));
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:body.length,c:head.length-1}})};
+  XLSX.utils.book_append_sheet(wb,ws,'Conformidade');
+  // aba irregulares
+  const irr=dados.filter(r=>r.situacao==='nok');
+  const h2=['DATA','SETOR','SUB ÁREA','COLABORADOR','ENTRADA','RET. ALMOÇO','SAÍDA','OCORRÊNCIA'];
+  const b2=irr.map(r=>[r.data.slice(8,10)+'/'+r.data.slice(5,7),r.setor,r.sub,r.nome,
+    r.entrada||'',r.retInt||'',r.saida||'',r.flags.join(' | ')]);
+  const ws2=XLSX.utils.aoa_to_sheet([h2,...b2]);
+  ws2['!cols']=h2.map((h,i)=>({wch:i===3?34:i===7?42:14}));
+  XLSX.utils.book_append_sheet(wb,ws2,'Irregularidades');
+  XLSX.writeFile(wb,'conformidade_ponto_pangeia.xlsx');
+}
+function exportBanco(){
+  const dados=bancoFiltrado();
+  const wb=XLSX.utils.book_new();
+  const head=['#','COLABORADOR','SETOR','SUB ÁREA','SALDO ACUMULADO','TIPO','SITUAÇÃO'];
+  const body=dados.map((r,i)=>[i+1,r.nome,r.setor,r.sub,r.saldo,r.tipo,
+    r.mins>0?'Positivo':r.mins<0?'Negativo':'Zero']);
+  const ws=XLSX.utils.aoa_to_sheet([head,...body]);
+  ws['!cols']=[{wch:5},{wch:36},{wch:18},{wch:22},{wch:16},{wch:12},{wch:12}];
+  ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:body.length,c:head.length-1}})};
+  XLSX.utils.book_append_sheet(wb,ws,'Banco de Horas');
+  // resumo por setor
+  const porSetor={};
+  dados.forEach(r=>{if(!porSetor[r.setor])porSetor[r.setor]={pos:0,neg:0,n:0};
+    porSetor[r.setor].n++; if(r.mins>0)porSetor[r.setor].pos+=r.mins; if(r.mins<0)porSetor[r.setor].neg+=r.mins;});
+  const h2=['SETOR','COLAB.','SALDO POSITIVO','SALDO NEGATIVO','SALDO LÍQUIDO'];
+  const b2=Object.entries(porSetor).sort((a,b)=>(b[1].pos+b[1].neg)-(a[1].pos+a[1].neg))
+    .map(([s,v])=>[s,v.n,hhmm(v.pos),hhmm(v.neg),hhmm(v.pos+v.neg)]);
+  const ws2=XLSX.utils.aoa_to_sheet([h2,...b2]);
+  ws2['!cols']=[{wch:22},{wch:10},{wch:16},{wch:16},{wch:16}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Resumo por Setor');
+  XLSX.writeFile(wb,'banco_horas_pangeia.xlsx');
+}
+
+/* ============================================================
+   EVENTOS / INIT
+   ============================================================ */
+function setupDropzone(dzId,inputId,handler){
+  const dz=el(dzId), inp=el(inputId);
+  dz.addEventListener('click',()=>inp.click());
+  inp.addEventListener('change',e=>{if(e.target.files[0])handler(e.target.files[0]);});
+  ['dragover','dragenter'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+  dz.addEventListener('drop',e=>{if(e.dataTransfer.files[0])handler(e.dataTransfer.files[0]);});
+}
+
+function onPontoFile(file){
+  el('pontoBanner').innerHTML='<div class="banner info"><span class="spin"></span> Processando '+file.name+'…</div>';
+  lerArquivo(file,rows=>{
+    try{
+      PONTO=parsePonto(rows);
+      if(!PONTO.length){el('pontoBanner').innerHTML='<div class="banner err">⚠️ Nenhum registro de ponto encontrado. Confirme que é o relatório de Folha de Ponto do Solides.</div>';return;}
+      const datas=[...new Set(PONTO.map(r=>r.data))].sort();
+      const semCad=PONTO.filter(r=>r.setor==='(sem cadastro)').map(r=>r.nome);
+      const semUniq=[...new Set(semCad)];
+      let msg=`<div class="banner ok">✅ ${PONTO.length} registros de ${datas.length} dia(s) processados`;
+      if(semUniq.length) msg+=` · 🟡 ${semUniq.length} colaborador(es) sem cadastro na base: ${semUniq.slice(0,4).join(', ')}${semUniq.length>4?'…':''}`;
+      msg+='</div>';
+      el('pontoBanner').innerHTML=msg;
+      // popular filtros
+      popSelect(el('fData'),datas.map(d=>d));
+      // trocar value/label da data
+      el('fData').innerHTML='<option value="">Todas as datas</option>'+datas.map(d=>`<option value="${d}">${d.slice(8,10)}/${d.slice(5,7)}/${d.slice(0,4)}</option>`).join('');
+      popSelect(el('fSetor'),[...new Set(PONTO.map(r=>r.setor))].sort());
+      popSelect(el('fSub'),[...new Set(PONTO.map(r=>r.sub))].sort());
+      el('pontoContent').classList.remove('hide');
+      renderPonto();
+    }catch(err){el('pontoBanner').innerHTML='<div class="banner err">❌ Erro ao processar: '+err.message+'</div>';}
+  });
+}
+
+function onBancoFile(file){
+  el('bancoBanner').innerHTML='<div class="banner info"><span class="spin"></span> Processando '+file.name+'…</div>';
+  lerArquivo(file,rows=>{
+    try{
+      BANCO=parseBanco(rows);
+      if(!BANCO.length){el('bancoBanner').innerHTML='<div class="banner err">⚠️ Nenhum saldo encontrado. Confirme que é o RelatorioBancoHoras do Solides.</div>';return;}
+      const semUniq=[...new Set(BANCO.filter(r=>r.setor==='(sem cadastro)').map(r=>r.nome))];
+      let msg=`<div class="banner ok">✅ ${BANCO.length} colaboradores processados`;
+      if(semUniq.length) msg+=` · 🟡 ${semUniq.length} sem cadastro: ${semUniq.slice(0,4).join(', ')}${semUniq.length>4?'…':''}`;
+      msg+='</div>';
+      el('bancoBanner').innerHTML=msg;
+      popSelect(el('bSetor'),[...new Set(BANCO.map(r=>r.setor))].sort());
+      popSelect(el('bSub'),[...new Set(BANCO.map(r=>r.sub))].sort());
+      el('bancoContent').classList.remove('hide');
+      renderBanco();
+    }catch(err){el('bancoBanner').innerHTML='<div class="banner err">❌ Erro: '+err.message+'</div>';}
+  });
+}
+
+document.addEventListener('DOMContentLoaded',async()=>{
+  await carregarBase();
+  setupDropzone('dzPonto','filePonto',onPontoFile);
+  setupDropzone('dzBanco','fileBanco',onBancoFile);
+
+  // tabs
+  document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+    t.classList.add('on');
+    el('tab-ponto').classList.toggle('hide',t.dataset.tab!=='ponto');
+    el('tab-banco').classList.toggle('hide',t.dataset.tab!=='banco');
+  }));
+
+  // filtros ponto
+  ['fData','fSetor','fSub','fStatus','fNome'].forEach(id=>{
+    el(id).addEventListener('input',()=>{
+      // sub área depende do setor
+      if(id==='fSetor'){
+        const se=el('fSetor').value;
+        const subs=[...new Set(PONTO.filter(r=>!se||r.setor===se).map(r=>r.sub))].sort();
+        popSelect(el('fSub'),subs,true);
+      }
+      renderPonto();
+    });
+  });
+  el('btnLimpar').addEventListener('click',()=>{
+    ['fData','fSetor','fSub','fStatus'].forEach(id=>el(id).value='');el('fNome').value='';
+    popSelect(el('fSub'),[...new Set(PONTO.map(r=>r.sub))].sort());
+    renderPonto();
+  });
+  el('btnExportPonto').addEventListener('click',exportPonto);
+
+  // filtros banco
+  ['bSetor','bSub','bSaldo','bNome'].forEach(id=>{
+    el(id).addEventListener('input',()=>{
+      if(id==='bSetor'){const se=el('bSetor').value;
+        const subs=[...new Set(BANCO.filter(r=>!se||r.setor===se).map(r=>r.sub))].sort();
+        popSelect(el('bSub'),subs,true);}
+      renderBanco();
+    });
+  });
+  el('bLimpar').addEventListener('click',()=>{
+    ['bSetor','bSub','bSaldo'].forEach(id=>el(id).value='');el('bNome').value='';
+    popSelect(el('bSub'),[...new Set(BANCO.map(r=>r.sub))].sort());
+    renderBanco();
+  });
+  el('btnExportBanco').addEventListener('click',exportBanco);
+});
+
+</script>
+</body>
+</html>
