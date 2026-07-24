@@ -726,6 +726,31 @@ function modalColab(nome){
     breakdown=` Sendo ${partes.join(' e ')}.`;
   }
 
+  // subgrupo de irregularidades por tipo (o que o usuário pediu)
+  const tiposIrr=[
+    {ic:'🚪',nome:'Atraso na entrada',n:p.cE,cor:'#D63A4A',desc:'chegou depois do horário (além dos 10min)'},
+    {ic:'🍽',nome:'Almoço acima do limite',n:p.cR,cor:'#E8873B',desc:'ultrapassou o tempo de almoço'},
+    {ic:'🏃',nome:'Saída antecipada',n:p.cS,cor:'#C4456B',desc:'saiu antes do horário'},
+    {ic:'🕳',nome:'Esqueceu de bater ponto',n:p.totEsq,cor:'#6B21C7',desc:'não registrou uma das batidas'}
+  ].filter(t=>t.n>0).sort((a,b)=>b.n-a.n);
+  const maxIrr=Math.max(1,...tiposIrr.map(t=>t.n));
+  let breakdownVisual='';
+  if(tiposIrr.length){
+    breakdownVisual=`<h4>🔬 Irregularidades por tipo</h4>
+      <p style="font-size:.82rem;color:var(--cinza);margin-bottom:10px">Das ${p.totNok} irregularidades de ${primeiroNome(nome)}, veja a natureza de cada uma:</p>
+      <div style="display:flex;flex-direction:column;gap:9px">
+      ${tiposIrr.map(t=>`
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:200px;font-size:.84rem;flex-shrink:0">${t.ic} <b>${t.nome}</b></div>
+          <div style="flex:1;background:var(--roxo-lav2);border-radius:8px;height:26px;position:relative;overflow:hidden">
+            <div style="position:absolute;left:0;top:0;height:100%;width:${Math.round(t.n/maxIrr*100)}%;background:${t.cor};border-radius:8px;min-width:32px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px">
+              <span style="color:#fff;font-weight:800;font-size:.8rem">${t.n}</span></div>
+          </div>
+          <div style="width:150px;font-size:.72rem;color:var(--cinza);flex-shrink:0">${t.desc}</div>
+        </div>`).join('')}
+      </div>`;
+  }
+
   const body=`
     <div class="mstat">
       <div class="b"><div class="v">${p.taxaConf}%</div><div class="k">Conformidade</div></div>
@@ -738,6 +763,8 @@ function modalColab(nome){
 
     <h4>🩺 Diagnóstico</h4>
     <div class="acao-box ${sev}">${diag}${breakdown} ${domTxt}</div>
+
+    ${breakdownVisual}
 
     <h4>📊 Tendência</h4>
     ${tendBox}
