@@ -6,6 +6,8 @@
 <title>Pangeia 96 · Painel de Ponto & Banco de Horas</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
   --roxo:#6B21C7; --roxo-esc:#3D0B78; --roxo-med:#8B3FE0; --roxo-claro:#B794E6;
@@ -269,6 +271,7 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
       <div class="campo"><label>Buscar colaborador</label><input type="text" id="fNome" placeholder="digite um nome…"></div>
       <div class="acoes">
         <button class="btn ghost" id="btnLimpar">Limpar</button>
+        <button class="btn ghost" id="btnGerarResumo">📄 Gerar Resumo</button>
         <button class="btn amarelo" id="btnExportPonto">⬇ Exportar Excel</button>
       </div>
     </div>
@@ -322,7 +325,10 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
     </div>
 
     <div class="card"><h3>📋 Registros detalhados</h3>
-      <p class="hint">Detalhe dia a dia. Clique num nome para o perfil completo. Vermelho = fora da regra.</p>
+      <p class="hint">Filtre direto pelo cabeçalho da tabela. Clique num nome para o perfil completo. Vermelho = fora da regra.</p>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px">
+        <button class="btn ghost" id="btnExportColorido">🎨 Exportar Excel com cores</button>
+      </div>
       <div class="tbl-wrap"><table id="tblPonto"><thead></thead><tbody></tbody></table></div>
     </div>
   </div>
@@ -433,6 +439,17 @@ function glossPopup(chave){
 }
 const dfmt=d=>d.slice(8,10)+'/'+d.slice(5,7);
 const primeiroNome=n=>{const p=(n||'').split(/\s+/);return p[0]+(p[1]?' '+p[1]:'');};
+// normaliza nomes que vêm em CAIXA ALTA do relatório do Solides (mantém preposições minúsculas)
+const PREP_MIN=new Set(['de','da','do','das','dos','e']);
+function titleCase(s){
+  if(!s) return s;
+  // se já tem letras minúsculas misturadas, mantém como está (não mexe em nomes já corretos)
+  if(/[a-zà-ú]/.test(s) && /[A-ZÀ-Ú]/.test(s) && s!==s.toUpperCase()) return s.trim();
+  return s.trim().toLowerCase().split(/\s+/).map((w,i)=>{
+    if(i>0 && PREP_MIN.has(w)) return w;
+    return w.charAt(0).toUpperCase()+w.slice(1);
+  }).join(' ');
+}
 
 function findBase(nome){
   const n=norm(nome); let h=BASE.find(b=>norm(b.nome)===n); if(h)return h;
@@ -479,7 +496,7 @@ function parsePonto(rows){
     const vals=(rows[i]||[]).map(v=>v==null?'':String(v).trim()).filter(v=>v!=='');
     if(vals.includes('DADOS DO COLABORADOR')&&rows[i+1]){
       const nr=(rows[i+1]||[]).map(v=>v==null?'':String(v).trim()).filter(v=>v!=='');
-      const k=nr.indexOf('Nome:'); if(k>=0&&nr[k+1])nome=nr[k+1];
+      const k=nr.indexOf('Nome:'); if(k>=0&&nr[k+1])nome=titleCase(nr[k+1]);
     }
     if(vals.length>=3){
       let data=null,dm=/^(\d{4})-(\d{2})-(\d{2})/.exec(vals[0]);
@@ -909,6 +926,39 @@ function renderInsightsPonto(){
   box.querySelectorAll('.insight').forEach((d,i)=>{if(ins[i].key)d.addEventListener('click',()=>modalInsight(ins[i],dados));});
 }
 
+/* ---- drill-down do gráfico "Tipo de ocorrência": quem puxa cada indicador ---- */
+function modalTipoOcorrencia(tipo,base){
+  const matchFlag=r=>{
+    if(tipo==='Atraso entrada')return r.flags.some(f=>f.startsWith('Entrada'));
+    if(tipo==='Almoço acima')return r.flags.some(f=>/almo[çc]o/i.test(f));
+    return r.flags.some(f=>f.startsWith('Saída'));
+  };
+  const regs=base.filter(r=>r.situacao==='nok'&&matchFlag(r));
+  const porPessoa={};
+  regs.forEach(r=>{
+    if(!porPessoa[r.nome])porPessoa[r.nome]={n:0,min:0,setor:r.setor,sub:r.sub};
+    porPessoa[r.nome].n++;
+    // soma o minuto específico do desvio (não o total de horasPerdidas do registro, que pode incluir outro tipo)
+    let delta=0;
+    if(tipo==='Atraso entrada')delta=r.dE>0?r.dE:0;
+    else if(tipo==='Saída antecipada')delta=r.dS<0?Math.abs(r.dS):0;
+    else if(tipo==='Almoço acima'&&r.detalhe.almoco){delta=r.detalhe.almoco.tipo==='fixo'?(r.detalhe.almoco.delta>0?r.detalhe.almoco.delta:0):(r.detalhe.almoco.extra>0?r.detalhe.almoco.extra:0);}
+    porPessoa[r.nome].min+=delta;
+  });
+  const arr=Object.entries(porPessoa).sort((a,b)=>b[1].min-a[1].min);
+  const totMin=arr.reduce((s,[,v])=>s+v.min,0);
+  const icone=tipo==='Atraso entrada'?'🚪':tipo==='Almoço acima'?'🍽':'🏃';
+  const body=`
+    <p style="font-size:.86rem;color:var(--cinza);margin-bottom:12px">Quem mais contribui para <b>${tipo}</b> — ${arr.length} colaborador(es), somando ${hhmm(totMin)}.</p>
+    <table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Setor</th><th>Ocorr.</th><th>Total do desvio</th></tr></thead><tbody>
+    ${arr.length?arr.map(([n,v])=>`<tr><td class="tbl-link" onclick="irPara(()=>modalColab('${n.replace(/'/g,"\\'")}'))"><b>${n}</b></td>
+      <td>${v.setor} · ${v.sub}</td><td>${v.n}</td>
+      <td style="color:var(--vermelho);font-weight:700">${hhmm(v.min)}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--cinza)">Nenhum registro.</td></tr>'}
+    </tbody></table>
+    <p style="font-size:.78rem;color:var(--cinza);margin-top:10px">💡 Use essa lista para embasar a conversa com sua liderança sobre este padrão específico no setor.</p>`;
+  abrirModal(icone+' '+tipo, arr.length+' colaborador(es) · '+hhmm(totMin)+' no total', body, ()=>modalTipoOcorrencia(tipo,base));
+}
+
 function modalInsight(ins,dados){
   const nok=dados.filter(r=>r.situacao==='nok');
   let body='';
@@ -1023,12 +1073,27 @@ function renderEstrategico(dados){
       <td style="font-size:.78rem">${a.topOfensor?a.topOfensor.nome.split(' ').slice(0,2).join(' ')+' ('+hhmm(a.topOfensor.min)+')':'—'}</td>
     </tr>`;
   }).join('');
-
-  // KPIs de impacto agregado
-  const totP=an.reduce((s,a)=>s+a.perdida,0), totG=an.reduce((s,a)=>s+a.gerada,0);
+  // linha de totais — soma tudo, dá a visão consolidada num só lugar
   const totHead=an.reduce((s,a)=>s+a.headcount,0);
-  const totOk=an.reduce((s,a)=>s+a.ok,0), totNok=an.reduce((s,a)=>s+a.nok,0);
-  const aderGeral=(totOk+totNok)?Math.round(totOk/(totOk+totNok)*100):0;
+  const totOkT=an.reduce((s,a)=>s+a.ok,0), totNokT=an.reduce((s,a)=>s+a.nok,0);
+  const totPerdida=an.reduce((s,a)=>s+a.perdida,0), totGerada=an.reduce((s,a)=>s+a.gerada,0);
+  const aderTot=(totOkT+totNokT)?Math.round(totOkT/(totOkT+totNokT)*100):0;
+  tb.innerHTML+=`<tr style="background:var(--roxo-lav);font-weight:800;border-top:2px solid var(--roxo)">
+    <td>TOTAL GERAL</td>
+    <td>${totHead} pessoas</td>
+    <td style="color:var(--roxo)">${aderTot}%</td>
+    <td>${totNokT} de ${totOkT+totNokT}</td>
+    <td>—</td>
+    <td style="color:var(--vermelho)">${hhmm(totPerdida)}</td>
+    <td style="color:var(--vermelho)">${totHead?hhmm(Math.round(totPerdida/totHead)):'—'}</td>
+    <td style="color:var(--roxo)">${hhmm(totGerada)}</td>
+    <td>—</td>
+  </tr>`;
+
+  // KPIs de impacto agregado (reaproveita os totais já calculados acima)
+  const totP=totPerdida, totG=totGerada;
+  const totOk=totOkT, totNok=totNokT;
+  const aderGeral=aderTot;
   el('kpisImpacto').innerHTML=`
     <div class="kpi" style="cursor:default"><div class="n">${aderGeral}%</div><div class="l">Aderência geral ${help('aderencia')}</div><div class="sub">${totOk} de ${totOk+totNok} pontuais</div></div>
     <div class="kpi verm" style="cursor:default"><div class="n">${hhmm(totP)}</div><div class="l">⏳ Horas perdidas ${help('horaPerdida')}</div><div class="sub">${totHead?hhmm(Math.round(totP/totHead)):'—'} por colaborador</div></div>
@@ -1036,13 +1101,24 @@ function renderEstrategico(dados){
     <div class="kpi laranja" style="cursor:default"><div class="n">${an.filter(a=>a.aderencia!=null&&a.aderencia<60).length}</div><div class="l">🔴 Setores críticos ${help('aderencia','right')}</div><div class="sub">aderência abaixo de 60%</div></div>`;
 }
 
-function modalSetor(setor){
+function modalSetor(setor,filtroTipo){
   const dados=pontoEstrategico().filter(r=>r.setor===setor);
   const a=analiseSetor(pontoEstrategico()).find(x=>x.setor===setor);
   if(!a){return;}
-  // ranking de ofensores do setor
-  const ofc={};dados.filter(r=>r.horasPerdidas>0).forEach(r=>{if(!ofc[r.nome])ofc[r.nome]={min:0,n:0};ofc[r.nome].min+=r.horasPerdidas;ofc[r.nome].n++;});
-  const ofArr=Object.entries(ofc).sort((x,y)=>y[1].min-x[1].min);
+  // ranking de ofensores — perdida E gerada, cada um com seu tipo
+  const ofP={},ofG={};
+  dados.filter(r=>r.horasPerdidas>0).forEach(r=>{if(!ofP[r.nome])ofP[r.nome]={min:0,n:0};ofP[r.nome].min+=r.horasPerdidas;ofP[r.nome].n++;});
+  dados.filter(r=>r.horasGeradas>0).forEach(r=>{if(!ofG[r.nome])ofG[r.nome]={min:0,n:0};ofG[r.nome].min+=r.horasGeradas;ofG[r.nome].n++;});
+  let linhas=[
+    ...Object.entries(ofP).map(([n,v])=>({nome:n,tipo:'perdida',n:v.n,min:v.min})),
+    ...Object.entries(ofG).map(([n,v])=>({nome:n,tipo:'gerada',n:v.n,min:v.min}))
+  ];
+  // filtro vindo do clique nos cards do topo (perdida/gerada/'' = todas)
+  const ft=filtroTipo||'';
+  const linhasFiltradas=ft?linhas.filter(l=>l.tipo===ft):linhas;
+  // ordena: perdidas primeiro (como pedido), depois geradas; dentro de cada, maior impacto primeiro
+  linhasFiltradas.sort((x,y)=> (x.tipo===y.tipo? y.min-x.min : (x.tipo==='perdida'?-1:1)) );
+
   const semaforo=a.aderencia==null?'⚪':a.aderencia>=80?'🟢':a.aderencia>=60?'🟡':'🔴';
   let veredito;
   if(a.aderencia==null)veredito=`<div class="acao-box info">Sem registros de presença suficientes para avaliar.</div>`;
@@ -1050,20 +1126,28 @@ function modalSetor(setor){
   else if(a.aderencia>=60)veredito=`<div class="acao-box warn">🟡 <b>Atenção.</b> Aderência de ${a.aderencia}% está em zona de alerta. Vale um alinhamento coletivo com a equipe e foco no problema dominante (${a.problema.toLowerCase()}).</div>`;
   else veredito=`<div class="acao-box crit">🔴 <b>Setor crítico.</b> Apenas ${a.aderencia}% de aderência. Recomenda-se reunião com a liderança do setor, revisão de causas estruturais (escala, transporte) e plano de ação com prazo.</div>`;
 
+  const cardOn=(t)=>ft===t?'outline:2.5px solid var(--roxo);outline-offset:-1px':'';
   const body=`
     <div class="mstat">
       <div class="b"><div class="v">${a.headcount}</div><div class="k">Equipe</div></div>
       <div class="b ${a.aderencia>=80?'verde':a.aderencia>=60?'laranja':'verm'}"><div class="v">${a.aderencia==null?'—':a.aderencia+'%'}</div><div class="k">Aderência</div></div>
-      <div class="b verm"><div class="v">${hhmm(a.perdida)}</div><div class="k">H. perdidas</div></div>
-      <div class="b laranja"><div class="v">${hhmm(a.gerada)}</div><div class="k">H. s/ justif.</div></div>
+      <div class="b verm" style="cursor:pointer;${cardOn('perdida')}" onclick="irPara(()=>modalSetor('${setor}','${ft==='perdida'?'':'perdida'}'))"><div class="v">${hhmm(a.perdida)}</div><div class="k">⏳ H. perdidas ${help('horaPerdida')}</div></div>
+      <div class="b laranja" style="cursor:pointer;${cardOn('gerada')}" onclick="irPara(()=>modalSetor('${setor}','${ft==='gerada'?'':'gerada'}'))"><div class="v">${hhmm(a.gerada)}</div><div class="k">💰 H. s/ justif. ${help('horaGerada')}</div></div>
     </div>
+    <p style="font-size:.76rem;color:var(--cinza);margin-top:-6px">💡 Clique nos cards de horas acima para filtrar a tabela abaixo por tipo.</p>
     <h4>🩺 Veredito</h4>${veredito}
     <div class="acao-box info">📌 <b>Perdida por colaborador:</b> ${hhmm(Math.round(a.perdidaPorPessoa))} — este é o número que permite comparar setores de tamanhos diferentes de forma justa. Problema dominante: <b>${a.problema}</b>.</div>
-    <h4>🚨 Colaboradores que mais impactam</h4>
-    <table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Ocorr.</th><th>Horas perdidas</th></tr></thead><tbody>
-    ${ofArr.length?ofArr.map(([n,v])=>`<tr><td class="tbl-link" onclick="irPara(()=>modalColab('${n.replace(/'/g,"\\'")}'))"><b>${n}</b></td><td>${v.n}</td><td style="color:var(--vermelho);font-weight:700">${hhmm(v.min)}</td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--cinza)">Nenhum impacto de horas perdidas.</td></tr>'}
+    <h4>🚨 Anomalias de horas por colaborador ${ft?'<span style="font-weight:400;font-size:.78rem;color:var(--cinza)">(filtrado: '+(ft==='perdida'?'só perdidas':'só geradas')+')</span>':''}</h4>
+    <table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Tipo</th><th>Ocorr.</th><th>Quantidade</th></tr></thead><tbody>
+    ${linhasFiltradas.length?linhasFiltradas.map(l=>{
+      const cor=l.tipo==='perdida'?'var(--vermelho)':'var(--roxo)';
+      const label=l.tipo==='perdida'?'⏳ Perdida':'💰 Gerada s/ justif.';
+      return `<tr><td class="tbl-link" onclick="irPara(()=>modalColab('${l.nome.replace(/'/g,"\\'")}'))"><b>${l.nome}</b></td>
+        <td style="color:${cor};font-weight:700">${label}</td><td>${l.n}</td>
+        <td style="color:${cor};font-weight:700">${hhmm(l.min)}</td></tr>`;
+    }).join(''):'<tr><td colspan="4" style="text-align:center;color:var(--cinza)">Nenhuma anomalia de horas neste recorte.</td></tr>'}
     </tbody></table>`;
-  abrirModal(semaforo+' '+setor, a.headcount+' colaboradores · aderência '+(a.aderencia==null?'—':a.aderencia+'%'), body, ()=>modalSetor(setor));
+  abrirModal(semaforo+' '+setor, a.headcount+' colaboradores · aderência '+(a.aderencia==null?'—':a.aderencia+'%'), body, ()=>modalSetor(setor,filtroTipo));
 }
 
 /* ---------- CHARTS ---------- */
@@ -1087,13 +1171,15 @@ function renderChartsPonto(dados){
     {label:'Geradas s/ justif. (passivo)',data:an.map(a=>+(a.gerada/60).toFixed(2)),backgroundColor:'#F5C542'}]},
     {plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+hhmm(Math.round(c.raw*60))}}},scales:{y:{ticks:{callback:v=>v+'h'}}}});
 
-  // Tipo de ocorrência (sobre o todo)
+  // Tipo de ocorrência (sobre o todo) — clicável: mostra quem puxa cada tipo
   let cE=0,cR=0,cS=0;
   base.filter(r=>r.situacao==='nok').forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada')))cE++;if(r.flags.some(f=>/almo[çc]o/i.test(f)))cR++;if(r.flags.some(f=>f.startsWith('Saída')))cS++;});
   const totT=cE+cR+cS||1;
+  const TIPO_LABELS=['Atraso entrada','Almoço acima','Saída antecipada'];
   mkChart('chTipo','doughnut',{labels:[`Atraso entrada (${cE})`,`Almoço acima (${cR})`,`Saída antecipada (${cS})`],
     datasets:[{data:[cE,cR,cS],backgroundColor:['#6B21C7','#B794E6','#F5C542'],borderWidth:2,borderColor:'#fff'}]},
-    {cutout:'58%',plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.label+' · '+Math.round(c.raw/totT*100)+'%'}}}});
+    {cutout:'58%',plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.label+' · '+Math.round(c.raw/totT*100)+'%'}}}},
+    (evt,elems)=>{ if(elems&&elems.length) modalTipoOcorrencia(TIPO_LABELS[elems[0].index], base); });
 
   // Ranking pontualidade — esconde setores com pouquíssimos registros (ruído estatístico)
   const rank=an.filter(a=>a.aderencia!=null && (a.ok+a.nok)>=3).sort((a,b)=>b.aderencia-a.aderencia);
@@ -1197,7 +1283,30 @@ function renderConsol(dados){
 
 function renderTablePonto(dados){
   const cols=['Data','Dia','Setor','Sub área','Colaborador','Entrada','Saí. Int.','Ret. Int.','Saída','Situação'];
-  el('tblPonto').querySelector('thead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  const setoresOpt=[...new Set(PONTO.map(r=>r.setor))].sort();
+  const subOpt=[...new Set(PONTO.filter(r=>!el('fSetor').value||r.setor===el('fSetor').value).map(r=>r.sub))].sort();
+  // linha de filtros embutida no próprio cabeçalho da tabela (espelha os filtros gerais)
+  const filtroRow=`<tr class="filtro-row">
+    <th></th><th></th>
+    <th><select id="tfSetor" style="width:100%;font-size:.72rem;padding:3px;border-radius:6px;font-weight:400;text-transform:none">
+      <option value="">Todos</option>${setoresOpt.map(s=>`<option value="${s}" ${el('fSetor').value===s?'selected':''}>${s}</option>`).join('')}</select></th>
+    <th><select id="tfSub" style="width:100%;font-size:.72rem;padding:3px;border-radius:6px;font-weight:400;text-transform:none">
+      <option value="">Todas</option>${subOpt.map(s=>`<option value="${s}" ${el('fSub').value===s?'selected':''}>${s}</option>`).join('')}</select></th>
+    <th><input id="tfNome" placeholder="buscar…" value="${el('fNome').value}" style="width:100%;font-size:.72rem;padding:3px;border-radius:6px;font-weight:400;text-transform:none"></th>
+    <th></th><th></th><th></th><th></th>
+    <th><select id="tfStatus" style="width:100%;font-size:.72rem;padding:3px;border-radius:6px;font-weight:400;text-transform:none">
+      <option value="">Todas</option>
+      <option value="ok" ${el('fStatus').value==='ok'?'selected':''}>✅ Conforme</option>
+      <option value="nok" ${el('fStatus').value==='nok'?'selected':''}>⚠️ Irregular</option>
+      <option value="esq" ${el('fStatus').value==='esq'?'selected':''}>🕳 Esqueceu</option>
+      <option value="aus" ${el('fStatus').value==='aus'?'selected':''}>📋 Ausente</option></select></th>
+  </tr>`;
+  el('tblPonto').querySelector('thead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>'+filtroRow;
+  // conecta os filtros embutidos aos filtros gerais (única fonte de verdade)
+  ['tfSetor','tfSub','tfNome','tfStatus'].forEach(id=>{
+    const map={tfSetor:'fSetor',tfSub:'fSub',tfNome:'fNome',tfStatus:'fStatus'};
+    el(id).addEventListener('input',()=>{ el(map[id]).value=el(id).value; renderPonto(); });
+  });
   const tb=el('tblPonto').querySelector('tbody');
   if(!dados.length){tb.innerHTML=`<tr><td colspan="10" class="empty"><div class="ic">🔍</div>Nenhum registro para este filtro.</td></tr>`;return;}
   tb.innerHTML=dados.map(r=>{
@@ -1268,11 +1377,12 @@ function renderTableBanco(dados){
 }
 
 /* ---------- chart helper ---------- */
-function mkChart(id,type,data,opts){
+function mkChart(id,type,data,opts,onClick){
   if(charts[id])charts[id].destroy();
   const b={responsive:true,maintainAspectRatio:false,
     plugins:{legend:{labels:{font:{family:'Inter',size:11},color:'#2A1440',usePointStyle:true,padding:14}}},
-    scales:type==='doughnut'?{}:{x:{ticks:{font:{size:10},color:'#8B7FA3'},grid:{display:false}},y:{ticks:{font:{size:10},color:'#8B7FA3'},grid:{color:'#EDE4FB'}}}};
+    scales:type==='doughnut'?{}:{x:{ticks:{font:{size:10},color:'#8B7FA3'},grid:{display:false}},y:{ticks:{font:{size:10},color:'#8B7FA3'},grid:{color:'#EDE4FB'}}},
+    onClick:onClick, onHover:onClick?(evt,elems)=>{evt.native.target.style.cursor=elems.length?'pointer':'default';}:undefined};
   charts[id]=new Chart(el(id),{type,data,options:{...b,...(opts||{}),
     plugins:{...b.plugins,...((opts&&opts.plugins)||{})},scales:{...b.scales,...((opts&&opts.scales)||{})}}});
 }
@@ -1303,6 +1413,56 @@ function exportPonto(){
   ws3['!cols']=[{wch:20},{wch:10},{wch:12},{wch:12},{wch:18},{wch:16},{wch:16},{wch:18},{wch:34}];
   XLSX.utils.book_append_sheet(wb,ws3,'Visão Estratégica');
   XLSX.writeFile(wb,'conformidade_ponto_pangeia.xlsx');
+}
+
+/* Exportação colorida — usa ExcelJS pois a versão gratuita do SheetJS não grava
+   cores de célula. Reproduz visualmente as mesmas cores da tela (verde/vermelho/
+   roxo/laranja) para cada situação. */
+async function exportPontoColorido(){
+  const dados=pontoFiltrado();
+  const wb=new ExcelJS.Workbook();
+  wb.creator='Pangeia 96';
+  const ws=wb.addWorksheet('Conformidade');
+  const head=['DATA','DIA','SETOR','SUB ÁREA','COLABORADOR','ENTRADA','REF ENT','SAÍ INT','RET INT','SAÍDA','REF SAÍ','SITUAÇÃO','OCORRÊNCIA'];
+  ws.addRow(head);
+  const hRow=ws.getRow(1);
+  hRow.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF6B21C7'}};c.font={color:{argb:'FFFFFFFF'},bold:true};c.alignment={vertical:'middle'};});
+  ws.columns=[{width:10},{width:14},{width:16},{width:20},{width:34},{width:10},{width:9},{width:10},{width:10},{width:10},{width:9},{width:12},{width:42}];
+
+  const CORES={ // mesmas cores usadas na tela
+    ok:{fill:'FFE4F6EC',font:'FF146B3D'},
+    nok:{fill:'FFFCEAEC',font:'FF9E222F'},
+    esq:{fill:'FFEAE0FF',font:'FF6B21C7'},
+    aus:{fill:'FFFDF0E4',font:'FFE8873B'}
+  };
+  dados.forEach(r=>{
+    const situ=r.situacao==='ok'?'Conforme':r.situacao==='nok'?'Irregular (horário)':r.situacao==='esq'?'Irregular (esqueceu de bater)':'Ausente';
+    const ocorr=r.homeoffice?'Home office':(r.obs||r.flags.join(' | ')||'—');
+    const row=ws.addRow([dfmt(r.data),diaSemana(r.data),r.setor,r.sub,r.nome,r.entrada||'',r.refE,r.saidaInt||'',r.situacao==='esq'?'—':(r.retInt||''),r.saida||'',r.refS,situ,ocorr]);
+    const cor=CORES[r.situacao]||CORES.ok;
+    row.eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:cor.fill}};c.font={color:{argb:cor.font}};});
+  });
+  ws.autoFilter={from:'A1',to:'M1'};
+  ws.views=[{state:'frozen',ySplit:1}];
+
+  // aba estratégica com cores por semáforo de aderência
+  const an=analiseSetor(dados).sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa);
+  const ws2=wb.addWorksheet('Visão Estratégica');
+  const h2=['SETOR','EQUIPE','ADERÊNCIA %','IRREGULARES','PROBLEMA PRINCIPAL','HORAS PERDIDAS','PERDIDA/PESSOA','GERADAS S/ JUSTIF','MAIOR OFENSOR'];
+  ws2.addRow(h2);
+  ws2.getRow(1).eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF6B21C7'}};c.font={color:{argb:'FFFFFFFF'},bold:true};});
+  ws2.columns=[{width:20},{width:10},{width:12},{width:14},{width:18},{width:14},{width:14},{width:16},{width:34}];
+  an.forEach(a=>{
+    const row=ws2.addRow([a.setor,a.headcount,a.aderencia==null?'—':a.aderencia,a.nok,a.problema,hhmm(a.perdida),hhmm(Math.round(a.perdidaPorPessoa)),hhmm(a.gerada),a.topOfensor?a.topOfensor.nome:'—']);
+    const cor=a.aderencia==null?'FFEFEFEF':a.aderencia>=80?'FFE4F6EC':a.aderencia>=60?'FFFDF3D6':'FFFCEAEC';
+    row.getCell(3).fill={type:'pattern',pattern:'solid',fgColor:{argb:cor}};
+  });
+
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/octet-stream'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='conformidade_ponto_pangeia_colorido.xlsx'; a.click();
+  URL.revokeObjectURL(url);
 }
 function exportBanco(){
   const dados=bancoFiltrado();const wb=XLSX.utils.book_new();
@@ -1378,6 +1538,8 @@ document.addEventListener('DOMContentLoaded',async()=>{
   }));
   el('btnLimpar').addEventListener('click',()=>{['fData','fSetor','fSub','fStatus'].forEach(id=>el(id).value='');el('fNome').value='';popSelect(el('fSub'),[...new Set(PONTO.map(r=>r.sub))].sort());renderPonto();});
   el('btnExportPonto').addEventListener('click',exportPonto);
+  el('btnExportColorido').addEventListener('click',exportPontoColorido);
+  el('btnGerarResumo').addEventListener('click',abrirSelecaoResumo);
   ['bSetor','bSub','bSaldo','bNome'].forEach(id=>el(id).addEventListener('input',()=>{
     if(id==='bSetor'){const se=el('bSetor').value;popSelect(el('bSub'),[...new Set(BANCO.filter(r=>!se||r.setor===se).map(r=>r.sub))].sort(),true);}
     renderBanco();
@@ -1385,7 +1547,260 @@ document.addEventListener('DOMContentLoaded',async()=>{
   el('bLimpar').addEventListener('click',()=>{['bSetor','bSub','bSaldo'].forEach(id=>el(id).value='');el('bNome').value='';popSelect(el('bSub'),[...new Set(BANCO.map(r=>r.sub))].sort());renderBanco();});
   el('btnExportBanco').addEventListener('click',exportBanco);
 });
-window.modalColab=modalColab;window.fecharModal=fecharModal;window.modalSetor=modalSetor;window.irPara=irPara;window.voltarModal=voltarModal;window.glossPopup=glossPopup;
+/* ============================================================
+   GERAR RESUMO — PDF executivo estilo Pangeia
+   ============================================================ */
+function pessoasFocais(setor,base){
+  const cont={};
+  base.filter(r=>r.setor===setor&&(r.situacao==='nok'||r.situacao==='esq')).forEach(r=>{
+    if(!cont[r.nome])cont[r.nome]={n:0,perdida:0,nEsq:0};
+    cont[r.nome].n++; cont[r.nome].perdida+=(r.horasPerdidas||0);
+    if(r.situacao==='esq')cont[r.nome].nEsq++;
+  });
+  return Object.entries(cont).sort((a,b)=>b[1].n-a[1].n).slice(0,5).map(([nome,v])=>{
+    let acao='Monitorar';
+    if(v.n>=4)acao='Advertência formal por escrito';
+    else if(v.n===3)acao='Feedback + advertência verbal';
+    else if(v.n===2)acao='Conversa de alinhamento';
+    return {nome,n:v.n,perdida:v.perdida,nEsq:v.nEsq,acao};
+  });
+}
+
+function abrirSelecaoResumo(){
+  const base=pontoEstrategico();
+  if(!base.length){ abrirModal('📄 Gerar Resumo','',`<p>Nenhum dado processado ainda. Faça upload do relatório de ponto primeiro.</p>`); return; }
+  const setoresList=[...new Set(base.map(r=>r.setor))].filter(s=>s!=='(sem cadastro)'&&s!=='DESLIGADO').sort();
+  const body=`
+    <p style="font-size:.88rem;color:var(--cinza);margin-bottom:14px">Gera um PDF com resumo executivo, insights, oportunidades de melhoria e pessoas focais para feedback — no visual Pangeia.</p>
+    <button class="btn amarelo" id="btnResumoGeral" style="width:100%;justify-content:center;margin-bottom:16px">📊 Geral — uma página para cada setor</button>
+    <p style="font-size:.8rem;font-weight:800;color:var(--tinta);margin-bottom:8px">Ou selecione setores específicos:</p>
+    <div style="display:flex;flex-direction:column;gap:6px;max-height:240px;overflow-y:auto;margin-bottom:14px">
+      ${setoresList.map(s=>`<label style="display:flex;align-items:center;gap:8px;font-size:.86rem;padding:8px 10px;border:1px solid var(--linha);border-radius:8px;cursor:pointer">
+        <input type="checkbox" class="chkSetorResumo" value="${s}" style="width:16px;height:16px"> ${s}
+      </label>`).join('')}
+    </div>
+    <button class="btn" id="btnResumoSelecionados" style="width:100%;justify-content:center">Gerar PDF dos setores selecionados</button>
+    <p id="resumoMsg" style="font-size:.8rem;color:var(--vermelho);margin-top:8px;display:none">Selecione ao menos um setor.</p>`;
+  abrirModal('📄 Gerar Resumo Executivo','Escolha o escopo do relatório',body);
+  el('btnResumoGeral').addEventListener('click',()=>{ fecharModal(); gerarPDFResumo(setoresList); });
+  el('btnResumoSelecionados').addEventListener('click',()=>{
+    const sel=[...document.querySelectorAll('.chkSetorResumo:checked')].map(c=>c.value);
+    if(!sel.length){ el('resumoMsg').style.display='block'; return; }
+    fecharModal(); gerarPDFResumo(sel);
+  });
+}
+
+function gerarPDFResumo(setoresSelecionados){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit:'mm',format:'a4'});
+  const PURPLE=[107,33,199], PURPLE_DARK=[61,11,120], LAV=[247,242,254], GRAY=[139,127,163], TINTA=[42,20,64];
+  const GREEN=[30,158,90], RED=[214,58,74], ORANGE=[232,135,59], YELLOW_TXT=[184,140,20];
+  const pageW=210, pageH=297, margin=16;
+  let y=38, pageNum=1;
+
+  function header(titulo,subtitulo){
+    doc.setFillColor(...PURPLE_DARK); doc.rect(0,0,pageW,28,'F');
+    doc.setFillColor(...PURPLE); doc.circle(20,14,7.5,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(8); doc.setFont(undefined,'bold');
+    doc.text('PANGEIA 96 · OPERAÇÕES', 33, 10);
+    doc.setFontSize(15); doc.text(titulo, 33, 18.5);
+    doc.setFontSize(8.5); doc.setFont(undefined,'normal');
+    doc.text(subtitulo||'', 33, 24);
+  }
+  function footer(){
+    doc.setFontSize(7.2); doc.setTextColor(...GRAY);
+    doc.text('Pangeia 96 · Painel operacional · Gerado em '+new Date().toLocaleDateString('pt-BR')+' às '+new Date().toLocaleTimeString('pt-BR').slice(0,5), margin, pageH-8);
+    doc.text('Página '+pageNum, pageW-margin-14, pageH-8);
+  }
+  function novaPagina(titulo,subtitulo){
+    if(pageNum>0){footer();}
+    doc.addPage(); pageNum++;
+    header(titulo,subtitulo); y=38;
+  }
+  function checkBreak(alt){ if(y+alt>pageH-16){ doc.addPage(); pageNum++; header('(continuação)',''); y=38; } }
+  function secTitle(txt,emoji){
+    checkBreak(9);
+    doc.setFontSize(11.5); doc.setFont(undefined,'bold'); doc.setTextColor(...PURPLE_DARK);
+    doc.text((emoji?emoji+'  ':'')+txt, margin, y); y+=6.5;
+  }
+  function paragraph(txt,color){
+    doc.setFont(undefined,'normal'); doc.setFontSize(9.3); doc.setTextColor(...(color||TINTA));
+    const lines=doc.splitTextToSize(txt, pageW-margin*2);
+    checkBreak(lines.length*4.3+2);
+    doc.text(lines, margin, y); y+=lines.length*4.3+4;
+  }
+  function bullet(txt,color){
+    checkBreak(7);
+    doc.setFillColor(...(color||PURPLE)); doc.circle(margin+1.1,y-1.3,1,'F');
+    doc.setFont(undefined,'normal'); doc.setFontSize(9.2); doc.setTextColor(...TINTA);
+    const lines=doc.splitTextToSize(txt, pageW-margin*2-6);
+    doc.text(lines, margin+5, y); y+=lines.length*4.2+2.5;
+  }
+  function kpiRow(items){
+    checkBreak(22);
+    const gap=3, w=(pageW-margin*2-gap*(items.length-1))/items.length;
+    items.forEach((it,i)=>{
+      const x=margin+i*(w+gap);
+      doc.setFillColor(...LAV); doc.roundedRect(x,y,w,18,2,2,'F');
+      doc.setTextColor(...(it.color||PURPLE)); doc.setFontSize(13); doc.setFont(undefined,'bold');
+      doc.text(String(it.value), x+w/2, y+9.5, {align:'center'});
+      doc.setFontSize(6.6); doc.setFont(undefined,'normal'); doc.setTextColor(...GRAY);
+      const ll=doc.splitTextToSize(it.label,w-4);
+      doc.text(ll, x+w/2, y+14, {align:'center'});
+    });
+    y+=24;
+  }
+  function miniTable(headers,rows,colW){
+    checkBreak(8);
+    let x=margin;
+    doc.setFillColor(...PURPLE); doc.rect(margin,y,pageW-margin*2,6.2,'F');
+    doc.setTextColor(255,255,255); doc.setFontSize(7.3); doc.setFont(undefined,'bold');
+    headers.forEach((h,i)=>{ doc.text(h,x+2,y+4.2); x+=colW[i]; });
+    y+=6.2;
+    doc.setFont(undefined,'normal'); doc.setTextColor(...TINTA); doc.setFontSize(8);
+    rows.forEach((r,ri)=>{
+      checkBreak(5.8);
+      if(ri%2===1){doc.setFillColor(...LAV); doc.rect(margin,y,pageW-margin*2,5.6,'F');}
+      x=margin;
+      r.forEach((c,i)=>{
+        const txt=doc.splitTextToSize(String(c),colW[i]-3)[0]||'';
+        doc.text(txt,x+2,y+4); x+=colW[i];
+      });
+      y+=5.6;
+    });
+    y+=4;
+  }
+  function acaoCor(acao){
+    if(acao.includes('Advertência formal'))return RED;
+    if(acao.includes('Feedback'))return ORANGE;
+    if(acao.includes('Conversa'))return YELLOW_TXT;
+    return GRAY;
+  }
+
+  /* ---------- dados-base (sempre o todo, respeita filtro de data se houver) ---------- */
+  const base=pontoEstrategico();
+  const anTodos=analiseSetor(base);
+  const an=anTodos.filter(a=>setoresSelecionados.includes(a.setor));
+  const totHead=an.reduce((s,a)=>s+a.headcount,0);
+  const totOk=an.reduce((s,a)=>s+a.ok,0), totNok=an.reduce((s,a)=>s+a.nok,0);
+  const totPerdida=an.reduce((s,a)=>s+a.perdida,0), totGerada=an.reduce((s,a)=>s+a.gerada,0);
+  const aderGeral=(totOk+totNok)?Math.round(totOk/(totOk+totNok)*100):0;
+  const dias=[...new Set(base.map(r=>r.data))].sort();
+  const periodoTxt=dias.length?`Período analisado: ${dfmt(dias[0])} a ${dfmt(dias[dias.length-1])} (${dias.length} dia(s) fechado(s))`:'';
+
+  /* ---------- CAPA: RESUMO EXECUTIVO GERAL ---------- */
+  header('Resumo Executivo de Ponto', periodoTxt+' · Gerado em '+new Date().toLocaleDateString('pt-BR'));
+  y=38;
+  kpiRow([
+    {label:'Colaboradores',value:totHead},
+    {label:'Aderência geral',value:aderGeral+'%',color:aderGeral>=80?GREEN:aderGeral>=60?YELLOW_TXT:RED},
+    {label:'Horas perdidas',value:hhmm(totPerdida),color:RED},
+    {label:'Geradas s/ justif.',value:hhmm(totGerada),color:ORANGE}
+  ]);
+
+  secTitle('Panorama geral','🎯');
+  const setoresCriticos=an.filter(a=>a.aderencia!=null&&a.aderencia<60);
+  const setoresSaudaveis=an.filter(a=>a.aderencia!=null&&a.aderencia>=80);
+  paragraph(`No recorte analisado, ${an.length} setor(es) somam ${totHead} colaboradores com aderência geral de ${aderGeral}%. `+
+    `Isso representa ${hhmm(totPerdida)} de horas perdidas de produtividade e ${hhmm(totGerada)} em horas geradas sem justificativa (passivo de HE não autorizada). `+
+    `${setoresCriticos.length?setoresCriticos.length+' setor(es) estão em estado crítico (aderência abaixo de 60%). ':''}`+
+    `${setoresSaudaveis.length?setoresSaudaveis.length+' setor(es) estão saudáveis (aderência ≥80%).':''}`);
+
+  secTitle('Principais insights','💡');
+  const piorSetor=[...an].filter(a=>a.aderencia!=null).sort((x,y)=>x.aderencia-y.aderencia)[0];
+  const piorPP=[...an].sort((x,y)=>y.perdidaPorPessoa-x.perdidaPorPessoa)[0];
+  const cntReinc={}; base.filter(r=>setoresSelecionados.includes(r.setor)&&(r.situacao==='nok'||r.situacao==='esq')).forEach(r=>{cntReinc[r.nome]=(cntReinc[r.nome]||0)+1;});
+  const reincGeral=Object.entries(cntReinc).filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1]);
+  if(piorSetor)bullet(`Setor com menor aderência: ${piorSetor.setor} (${piorSetor.aderencia}%) — problema dominante: ${piorSetor.problema}.`,RED);
+  if(piorPP)bullet(`Maior impacto proporcional (perdida/pessoa): ${piorPP.setor} com ${hhmm(Math.round(piorPP.perdidaPorPessoa))} por colaborador — este é o número que compara setores de tamanhos diferentes de forma justa.`,ORANGE);
+  if(reincGeral.length)bullet(`${reincGeral.length} colaborador(es) reincidentes (2+ irregularidades) no recorte. Destaque: ${reincGeral[0][0]} (${reincGeral[0][1]}x).`,PURPLE);
+  const totEsqGeral=base.filter(r=>setoresSelecionados.includes(r.setor)&&r.situacao==='esq').length;
+  if(totEsqGeral)bullet(`${totEsqGeral} caso(s) de esquecimento de batida de ponto — não penalizam horas, mas indicam falha de disciplina de registro a ser reforçada com a equipe.`,PURPLE);
+  if(!piorSetor&&!reincGeral.length)bullet('Nenhum ponto crítico identificado no recorte — equipe em bom nível de conformidade.',GREEN);
+
+  secTitle('Setores no recorte','📊');
+  miniTable(['Setor','Equipe','Aderência','H. Perdidas','Perdida/Pessoa','Geradas S/J'],
+    [...an].sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa).map(a=>[a.setor,a.headcount+'p',a.aderencia==null?'—':a.aderencia+'%',hhmm(a.perdida),hhmm(Math.round(a.perdidaPorPessoa)),hhmm(a.gerada)]),
+    [45,20,25,30,32,30]);
+
+  secTitle('Quem puxa cada indicador','🔍');
+  paragraph('Ranking de quem mais contribui para cada tipo de ocorrência — use para embasar conversas específicas com cada liderança de setor.');
+  const baseSel=base.filter(r=>setoresSelecionados.includes(r.setor));
+  ['Atraso entrada','Almoço acima','Saída antecipada'].forEach(tipo=>{
+    const matchFlag=r=>{
+      if(tipo==='Atraso entrada')return r.flags.some(f=>f.startsWith('Entrada'));
+      if(tipo==='Almoço acima')return r.flags.some(f=>/almo[çc]o/i.test(f));
+      return r.flags.some(f=>f.startsWith('Saída'));
+    };
+    const porPessoa={};
+    baseSel.filter(r=>r.situacao==='nok'&&matchFlag(r)).forEach(r=>{
+      if(!porPessoa[r.nome])porPessoa[r.nome]={n:0,min:0,setor:r.setor};
+      porPessoa[r.nome].n++;
+      let delta=0;
+      if(tipo==='Atraso entrada')delta=r.dE>0?r.dE:0;
+      else if(tipo==='Saída antecipada')delta=r.dS<0?Math.abs(r.dS):0;
+      else if(r.detalhe.almoco){delta=r.detalhe.almoco.tipo==='fixo'?(r.detalhe.almoco.delta>0?r.detalhe.almoco.delta:0):(r.detalhe.almoco.extra>0?r.detalhe.almoco.extra:0);}
+      porPessoa[r.nome].min+=delta;
+    });
+    const top=Object.entries(porPessoa).sort((x,y)=>y[1].min-x[1].min).slice(0,5);
+    if(top.length){
+      checkBreak(8);
+      doc.setFontSize(9.3); doc.setFont(undefined,'bold'); doc.setTextColor(...PURPLE);
+      doc.text(tipo, margin, y); y+=5;
+      miniTable(['Colaborador','Setor','Ocorr.','Total'],
+        top.map(([n,v])=>[n,v.setor,v.n,hhmm(v.min)]), [60,50,20,pageW-margin*2-60-50-20]);
+    }
+  });
+
+  /* ---------- UMA PÁGINA POR SETOR ---------- */
+  an.sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa).forEach(a=>{
+    const semaforo=a.aderencia==null?'⚪':a.aderencia>=80?'🟢':a.aderencia>=60?'🟡':'🔴';
+    novaPagina(semaforo+' '+a.setor, a.headcount+' colaboradores · aderência '+(a.aderencia==null?'—':a.aderencia+'%'));
+
+    kpiRow([
+      {label:'Equipe',value:a.headcount},
+      {label:'Aderência',value:a.aderencia==null?'—':a.aderencia+'%',color:a.aderencia>=80?GREEN:a.aderencia>=60?YELLOW_TXT:RED},
+      {label:'Horas perdidas',value:hhmm(a.perdida),color:RED},
+      {label:'Geradas s/ justif.',value:hhmm(a.gerada),color:ORANGE}
+    ]);
+
+    secTitle('Diagnóstico','🩺');
+    if(a.aderencia==null)paragraph('Sem registros de presença suficientes para avaliar este setor no recorte.');
+    else if(a.aderencia>=80)paragraph(`Setor saudável. Aderência de ${a.aderencia}% está dentro do padrão de excelência (≥80%). Recomenda-se manter o acompanhamento de rotina, sem necessidade de ação corretiva imediata.`,undefined);
+    else if(a.aderencia>=60)paragraph(`Setor em zona de atenção. Aderência de ${a.aderencia}% pede um alinhamento coletivo com a equipe, com foco no problema dominante: ${a.problema}.`,undefined);
+    else paragraph(`Setor crítico. Apenas ${a.aderencia}% de aderência. Recomenda-se reunião com a liderança do setor, revisão de causas estruturais (escala, transporte, dimensionamento) e plano de ação com prazo definido.`,undefined);
+
+    secTitle('Oportunidades de melhoria','🎯');
+    const oportunidades=[];
+    if(a.problema==='Atraso entrada')oportunidades.push('Revisar compatibilidade entre horário de início e opções de transporte/deslocamento da equipe.');
+    if(a.problema==='Almoço extra')oportunidades.push('Reforçar o limite de tempo de almoço em reunião rápida com a equipe; avaliar se o horário de pico do refeitório está gerando atraso sistêmico.');
+    if(a.problema==='Saída antecip.')oportunidades.push('Entender se a saída antecipada é pontual ou recorrente por colaborador; alinhar expectativa de permanência até o horário fechado.');
+    if(a.problema==='Esqueceu de bater')oportunidades.push('Reforçar a disciplina de registrar as 4 batidas diárias — especialmente o retorno do almoço, ponto mais comum de esquecimento.');
+    if(a.perdidaPorPessoa>=30)oportunidades.push(`Perdida por colaborador de ${hhmm(Math.round(a.perdidaPorPessoa))} está acima da média — priorizar este setor nas próximas rodadas de acompanhamento.`);
+    if(a.gerada>60)oportunidades.push(`${hhmm(a.gerada)} em horas geradas sem justificativa representam passivo financeiro de HE não autorizada — validar se há necessidade real de hora extra ou se é desalinhamento de horário.`);
+    if(!oportunidades.length)oportunidades.push('Nenhuma oportunidade crítica identificada — setor operando dentro do esperado.');
+    oportunidades.forEach(o=>bullet(o,ORANGE));
+
+    secTitle('Sugestão de alinhamento','💬');
+    if(a.aderencia!=null&&a.aderencia<60)paragraph('Sugere-se uma reunião formal com a liderança do setor esta semana, apresentando os dados deste relatório e definindo um plano de ação com responsável e prazo. Casos individuais reincidentes (ver pessoas focais abaixo) devem ser tratados em conversas separadas.');
+    else if(a.aderencia!=null&&a.aderencia<80)paragraph('Um alinhamento coletivo rápido (5-10min em reunião de equipe) reforçando a regra e o problema dominante costuma resolver desvios neste patamar, sem necessidade de medida individual generalizada.');
+    else paragraph('Setor não demanda alinhamento coletivo no momento. Reconhecimento da equipe pelo bom desempenho é uma ação de baixo custo e alto retorno.');
+
+    secTitle('Pessoas focais para feedback','🚨');
+    const focais=pessoasFocais(a.setor,base);
+    if(focais.length){
+      miniTable(['Colaborador','Ocorr.','H. Perdidas','Ação sugerida'],
+        focais.map(f=>[f.nome,f.n+(f.nEsq?' ('+f.nEsq+' esq.)':''),hhmm(f.perdida),f.acao]),
+        [55,28,28,pageW-margin*2-55-28-28]);
+    } else paragraph('Nenhum colaborador com irregularidade recorrente neste setor.',GREEN);
+  });
+
+  footer();
+  doc.save('resumo_executivo_pangeia_'+new Date().toISOString().slice(0,10)+'.pdf');
+}
+
+
+window.modalColab=modalColab;window.fecharModal=fecharModal;window.modalSetor=modalSetor;window.irPara=irPara;window.voltarModal=voltarModal;window.glossPopup=glossPopup;window.abrirSelecaoResumo=abrirSelecaoResumo;window.modalTipoOcorrencia=modalTipoOcorrencia;
 
 </script>
 </body>
