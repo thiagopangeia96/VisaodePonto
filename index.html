@@ -106,6 +106,29 @@ header::after{content:"";position:absolute;right:-30px;top:-60px;width:260px;hei
 .card{background:#fff;border-radius:18px;padding:22px;box-shadow:var(--sombra);margin:20px 0}
 .card h3{font-size:1.05rem;margin-bottom:3px;display:flex;align-items:center;gap:8px}
 .card .hint{font-size:.8rem;color:var(--cinza);margin-bottom:16px}
+/* tooltip de ajuda ⓘ */
+.help{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;
+  background:var(--roxo-lav);color:var(--roxo);font-size:.7rem;font-weight:800;cursor:help;margin-left:6px;
+  position:relative;vertical-align:middle;flex-shrink:0;border:1px solid var(--roxo-claro)}
+.help:hover{background:var(--roxo);color:#fff}
+.help .tip{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  background:var(--tinta);color:#fff;padding:11px 14px;border-radius:10px;font-size:.78rem;font-weight:400;
+  line-height:1.5;width:280px;z-index:50;box-shadow:var(--sombra-lg);text-align:left;transition:.15s;pointer-events:none;
+  text-transform:none;letter-spacing:normal}
+.help .tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--tinta)}
+.help:hover .tip{visibility:visible;opacity:1}
+.help .tip b{color:var(--amarelo);font-weight:700}
+/* quando o tooltip corre risco de cortar na borda esquerda */
+.help.tip-left .tip{left:0;transform:none}
+.help.tip-left .tip::after{left:14px}
+.help.tip-right .tip{left:auto;right:0;transform:none}
+.help.tip-right .tip::after{left:auto;right:14px}
+/* faixa de legenda geral no topo dos resultados */
+.legenda{background:#fff;border-radius:14px;padding:14px 18px;box-shadow:var(--sombra);margin:16px 0;
+  display:flex;flex-wrap:wrap;gap:18px;font-size:.8rem;color:var(--cinza)}
+.legenda .it{display:flex;align-items:center;gap:7px}
+.legenda .it b{color:var(--tinta)}
+.legenda .sw{width:14px;height:14px;border-radius:4px;flex-shrink:0}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin:20px 0}
 .grid2>.card{margin:0}
 @media(max-width:960px){.grid2{grid-template-columns:1fr}}
@@ -153,6 +176,7 @@ tr:hover td{background:var(--roxo-lav)}
 .pill.ok{background:var(--verde-bg);color:var(--verde-esc)}
 .pill.nok{background:var(--vermelho-bg);color:var(--vermelho-esc)}
 .pill.aus{background:var(--laranja-bg);color:var(--laranja)}
+.pill.esq{background:#EAE0FF;color:#6B21C7}
 .pill.horista{background:var(--amarelo);color:var(--roxo-esc)}
 .late{color:var(--vermelho);font-weight:700}
 .dt-badge{font-weight:700;font-size:.76rem;padding:2px 8px;border-radius:6px;background:var(--roxo-lav);color:var(--roxo)}
@@ -237,7 +261,8 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
       <div class="campo"><label>Setor</label><select id="fSetor"><option value="">Todos</option></select></div>
       <div class="campo"><label>Sub área</label><select id="fSub"><option value="">Todas</option></select></div>
       <div class="campo"><label>Situação</label><select id="fStatus"><option value="">Todas</option>
-        <option value="ok">✅ Conforme</option><option value="nok">⚠️ Irregular</option><option value="aus">📋 Ausente</option></select></div>
+        <option value="ok">✅ Conforme</option><option value="nok">⚠️ Irregular</option>
+        <option value="esq">🕳 Esqueceu de bater</option><option value="aus">📋 Ausente</option></select></div>
       <div class="campo"><label>Buscar colaborador</label><input type="text" id="fNome" placeholder="digite um nome…"></div>
       <div class="acoes">
         <button class="btn ghost" id="btnLimpar">Limpar</button>
@@ -247,34 +272,54 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
 
     <div id="resumoColab"></div>
     <div class="kpis" id="kpisPonto"></div>
+    <div class="legenda" id="legendaPonto"></div>
 
     <h2 class="sec-title">💡 Insights &amp; Recorrências</h2>
     <p class="sec-sub">Clique em qualquer insight para ver os dados por trás dele.</p>
     <div class="card"><div id="insightsPonto"></div></div>
 
-    <h2 class="sec-title">🔍 Colaboradores para acompanhar de perto</h2>
+    <h2 class="sec-title">🔍 Colaboradores para acompanhar de perto <span id="helpReinc"></span></h2>
     <p class="sec-sub">Clique em um card para ver diagnóstico completo, tendência e ação recomendada.</p>
     <div class="card"><div class="watch" id="watchPonto"></div></div>
 
+    <h2 class="sec-title">🎯 Visão estratégica por setor</h2>
+    <p class="sec-sub">Aderência proporcional ao tamanho da equipe e impacto real em horas. Clique num setor para o detalhe.</p>
+    <div class="card"><div class="tbl-wrap"><table id="tblEstrategico"><thead></thead><tbody></tbody></table></div></div>
+
+    <div class="kpis" id="kpisImpacto"></div>
+
     <div class="grid2">
-      <div class="card"><h3>📊 Conformidade por setor</h3>
-        <p class="hint">Taxa de conformidade e volume por setor.</p>
+      <div class="card"><h3>📊 Aderência ao ponto por setor <span class="help">ⓘ<span class="tip">% de registros conformes sobre presenças (conformes + irregulares). Não conta ausências. 🟢≥80% · 🟡60-79% · 🔴<60%.</span></span></h3>
+        <p class="hint">% de registros pontuais sobre presenças — proporcional, não bruto.</p>
         <div class="chart-box"><canvas id="chSetor"></canvas></div></div>
-      <div class="card"><h3>🕐 Tipo de ocorrência</h3>
-        <p class="hint">Onde se concentram as irregularidades.</p>
-        <div class="chart-box"><canvas id="chTipo"></canvas></div></div>
+      <div class="card"><h3>⏳ Impacto em horas por setor <span class="help">ⓘ<span class="tip">Passivo de produtividade: minutos que deveriam estar em serviço e não estavam (atraso entrada + almoço além do limite + saída antecipada). Já desconta 10min de tolerância. Não inclui esquecimento de batida.</span></span></h3>
+        <p class="hint">Horas perdidas (produtividade) vs. geradas sem justificativa (passivo).</p>
+        <div class="chart-box"><canvas id="chImpacto"></canvas></div></div>
     </div>
     <div class="grid2">
-      <div class="card"><h3>📈 Tendência diária de conformidade</h3>
-        <p class="hint">Evolução da taxa de conformidade ao longo dos dias.</p>
-        <div class="chart-box"><canvas id="chTend"></canvas></div></div>
+      <div class="card"><h3>🕐 Tipo de ocorrência <span class="help">ⓘ<span class="tip">Distribuição das irregularidades de horário entre atraso de entrada, almoço acima do limite e saída antecipada.</span></span></h3>
+        <p class="hint">Onde se concentram as irregularidades.</p>
+        <div class="chart-box"><canvas id="chTipo"></canvas></div></div>
       <div class="card"><h3>🏆 Ranking de pontualidade por setor</h3>
         <p class="hint">% de registros conformes — do melhor ao pior.</p>
         <div class="chart-box"><canvas id="chRank"></canvas></div></div>
     </div>
+    <div class="grid2">
+      <div class="card"><h3>📈 Tendência diária de conformidade <span class="help">ⓘ<span class="tip">Evolução da conformidade ao longo dos dias fechados. Piora/melhora só com dados suficientes; ocorrência isolada no fim é tratada como evento recente, não tendência.</span></span></h3>
+        <p class="hint">Evolução da taxa de conformidade ao longo dos dias.</p>
+        <div class="chart-box"><canvas id="chTend"></canvas></div></div>
+      <div class="card"><h3>🚨 Top ofensores — horas perdidas <span class="help tip-right">ⓘ<span class="tip">Passivo de produtividade: minutos que deveriam estar em serviço e não estavam (atraso entrada + almoço além do limite + saída antecipada). Já desconta 10min de tolerância. Não inclui esquecimento de batida.</span></span></h3>
+        <p class="hint">Colaboradores que mais impactam a produtividade.</p>
+        <div class="chart-box"><canvas id="chOfensores"></canvas></div></div>
+    </div>
+
+    <div class="card"><h3>👥 Resumo por colaborador</h3>
+      <p class="hint">Uma linha por colaborador com médias. Clique no cabeçalho para ordenar, ou num nome para o perfil.</p>
+      <div class="tbl-wrap"><table id="tblConsol"><thead></thead><tbody></tbody></table></div>
+    </div>
 
     <div class="card"><h3>📋 Registros detalhados</h3>
-      <p class="hint">Clique num nome para o perfil completo do colaborador. Vermelho = fora da regra.</p>
+      <p class="hint">Detalhe dia a dia. Clique num nome para o perfil completo. Vermelho = fora da regra.</p>
       <div class="tbl-wrap"><table id="tblPonto"><thead></thead><tbody></tbody></table></div>
     </div>
   </div>
@@ -324,7 +369,7 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
 
 <script>
 const BASE_CSV_URL = "https://docs.google.com/spreadsheets/d/1-EO4BLWEBxxvxFooZdqRU7Zn6ckdOutPZxXjmulyWUc/export?format=csv&gid=0";
-const BASE_EMBUTIDA = [{"nome": "João Lucas Idelfonso da Silva Rosa", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "HORISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Dayane da Silva Souza", "setor": "ACABAMENTO", "subarea": "ASSISTENTE DE SUP.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Emelly Danielly Marques da Silva", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Morgana Neres Pires", "setor": "PRODUÇÃO", "subarea": "ETIQUETAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Julia Ferreira dos Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lilianis Rielo Aranda", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Manuella Fairness", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kevily Cristina Brito da Silva Ribeiro", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Laura Ferreira Teodoro", "setor": "LOGÍSTICA", "subarea": "AFERIÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Heitor Oliveira de Souza", "setor": "PRODUÇÃO", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Aline Sousa de Oliveira", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Karina Saraíva Nascimento", "setor": "PRODUÇÃO", "subarea": "CONTAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fabíola Nita Costa Carvalho", "setor": "LOGÍSTICA", "subarea": "ANALISTA LINX", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Silas Gabriel da Silva Santos", "setor": "LOGÍSTICA", "subarea": "ANALISTA ESTOQUE", "tipo": "MENSALISTA", "entrada": "07:00", "saida": "17:00"}, {"nome": "Cayk de Souza Pereira", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda Dias do Nascimento", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Wanderson da Silva Miranda", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Aldiana Baia dos Santos", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Paulo Henrique Santos Souza", "setor": "PRODUÇÃO", "subarea": "MOTORISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kethelyn Eliane da Silva Lopes", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriel Santos Souza", "setor": "LOGÍSTICA", "subarea": "SUPERVISÃO OP.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "João Lucas de Sa Castro", "setor": "MARKETING", "subarea": "MARKETING", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lyriel Marcelle da Silva Soares", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "José Antonio de Sousa Gomes", "setor": "PRODUÇÃO", "subarea": "PCP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gesiel Lopes dos Santos", "setor": "PRODUÇÃO", "subarea": "MOTORISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kelly Saraiva Nascimento", "setor": "ACABAMENTO", "subarea": "BOTÃO/PASSADORIA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Geisiane Sousa Leite", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pedro Augusto Pereira Costa", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kevyn Lucas Menezes de Sousa", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Samila Victoria Pereira de Oliveira", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Geovane Pereira de Brito", "setor": "PRODUÇÃO", "subarea": "CONTAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vitor Enrik de Melo Lopes", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Karla Santos Bezerra", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Beatriz de Souza Oliveira", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Carolina Gadelha Borges Gonçalves", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Emilly Monielly Rodrigues de Jesus", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Irys Raiane Trindade Gomes", "setor": "PRODUÇÃO", "subarea": "ETIQUETAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pamela Jessica Pilicie", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ramilla Ligia Moura", "setor": "PRODUÇÃO", "subarea": "COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Eduardo Badias da Vitoria", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Josiane Pedrosa de Oliveira", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE PCP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "JESSICA POLIANA SOARES DOS SANTOS LOPES", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Izabella Santos Farias Ferreira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Aparecida Taveira da Silva", "setor": "ACABAMENTO", "subarea": "TROCAS E DEVOLUÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Rebeca Villany de Andrade", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Stephane Elizabeth de Oliveira Silva", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Luana Cardoso Lima", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria de Lourdes Gomes de Oliveira", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pedro Meireles Assunção Silva", "setor": "LOGÍSTICA", "subarea": "EXPEDIÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "PAULO HENRIQUE CAVALCANTE DE SOUZA", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Hevellyn Victorya Pereira Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kaylane Pereira Bispo", "setor": "LOGÍSTICA", "subarea": "ANALISTA TROCAS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "16:30"}, {"nome": "Vithorya Cristina Carneiro Ribeiro Reco", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ramilly Augusta Moura Macedo", "setor": "PRODUÇÃO", "subarea": "COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Giovana de Almeida Gouvea", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Brenda Ferreira Romao", "setor": "GENTE E GESTÃO", "subarea": "DP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriela Alves Machado", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lorraine Moreira", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "MARIA CLARA VELOSO CAMARA", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Stella Lima Brandão", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriela Moreira e Silva", "setor": "ESTILO", "subarea": "ESTILISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ellen Costa Oliveira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriel da Silva Santos Costa", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Grayce Kelly Lopes da Silva", "setor": "GENTE E GESTÃO", "subarea": "RECEPÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda Martins Bastos", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "KAUAN COELHO MARTINS", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Elizamar Soares Fagundes", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "MATHEUS DE CASTRO OLIVEIRA", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mayra Michelly Oliveira de Oliveira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabrielly Rocha Mendes Mota", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gleicilene Almeida Santos", "setor": "PRODUÇÃO", "subarea": "MODELISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "CAWAN HENRIQUE CESAR SILVA SOUSA", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "ISABELLA GUIMARAES FERREIRA", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Souza Silva", "setor": "LOGÍSTICA", "subarea": "TROCAS E DEVOLUÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Beatriz Ribeiro de Souza", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Valdeci Matias da Silva", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vitória Protti Eid", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE ENG. PROD.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Carolina Pinheiro Cardoso", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mariana de Assis Ferreira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda de Oliveira Benevides Lopes", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Araujo da Silva", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Elissa Santos Garcia", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Isaac David Figueiredo Cunha", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Marcelo Junior Pinheiro Cardoso", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vinicius Brandao de Oliveira", "setor": "LOGÍSTICA", "subarea": "FISCAL DE PÁTIO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Valkiria Rodrigues Meira", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kattely Karoline Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Francisca de Sousa Santos", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Igor Augusto Ferreira Sampaio", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Isabella Oliveira de Jesus", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Andreia Marques Pinto", "setor": "ADMINISTRATIVO", "subarea": "COMPRAS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mateus Henrique da Silva", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}];
+const BASE_EMBUTIDA = [{"nome": "João Lucas Idelfonso da Silva Rosa", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "HORISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Dayane da Silva Souza", "setor": "ACABAMENTO", "subarea": "ASSISTENTE DE SUP.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Emelly Danielly Marques da Silva", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Morgana Neres Pires", "setor": "PRODUÇÃO", "subarea": "ETIQUETAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Julia Ferreira dos Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lilianis Rielo Aranda", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Manuella Fairness", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kevily Cristina Brito da Silva Ribeiro", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Laura Ferreira Teodoro", "setor": "LOGÍSTICA", "subarea": "AFERIÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Heitor Oliveira de Souza", "setor": "PRODUÇÃO", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Aline Sousa de Oliveira", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Karina Saraíva Nascimento", "setor": "PRODUÇÃO", "subarea": "CONTAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fabíola Nita Costa Carvalho", "setor": "LOGÍSTICA", "subarea": "ANALISTA LINX", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Silas Gabriel da Silva Santos", "setor": "LOGÍSTICA", "subarea": "ANALISTA ESTOQUE", "tipo": "MENSALISTA", "entrada": "07:00", "saida": "17:00"}, {"nome": "Cayk de Souza Pereira", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda Dias do Nascimento", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Wanderson da Silva Miranda", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Aldiana Baia dos Santos", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Paulo Henrique Santos Souza", "setor": "PRODUÇÃO", "subarea": "MOTORISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kethelyn Eliane da Silva Lopes", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriel Santos Souza", "setor": "LOGÍSTICA", "subarea": "SUPERVISÃO OP.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "João Lucas de Sa Castro", "setor": "MARKETING", "subarea": "MARKETING", "tipo": "HOME OFFICE", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lyriel Marcelle da Silva Soares", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "José Antonio de Sousa Gomes", "setor": "PRODUÇÃO", "subarea": "PCP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gesiel Lopes dos Santos", "setor": "PRODUÇÃO", "subarea": "MOTORISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kelly Saraiva Nascimento", "setor": "ACABAMENTO", "subarea": "BOTÃO/PASSADORIA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Geisiane Sousa Leite", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pedro Augusto Pereira Costa", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kevyn Lucas Menezes de Sousa", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Samila Victoria Pereira de Oliveira", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Geovane Pereira de Brito", "setor": "PRODUÇÃO", "subarea": "CONTAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vitor Enrik de Melo Lopes", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Karla Santos Bezerra", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Beatriz de Souza Oliveira", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Carolina Gadelha Borges Gonçalves", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Emilly Monielly Rodrigues de Jesus", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Irys Raiane Trindade Gomes", "setor": "PRODUÇÃO", "subarea": "ETIQUETAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pamela Jessica Pilicie", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ramilla Ligia Moura", "setor": "PRODUÇÃO", "subarea": "COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Eduardo Badias da Vitoria", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Josiane Pedrosa de Oliveira", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE PCP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "JESSICA POLIANA SOARES DOS SANTOS LOPES", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Izabella Santos Farias Ferreira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Aparecida Taveira da Silva", "setor": "ACABAMENTO", "subarea": "TROCAS E DEVOLUÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Rebeca Villany de Andrade", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Stephane Elizabeth de Oliveira Silva", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Luana Cardoso Lima", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria de Lourdes Gomes de Oliveira", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Pedro Meireles Assunção Silva", "setor": "LOGÍSTICA", "subarea": "EXPEDIÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "PAULO HENRIQUE CAVALCANTE DE SOUZA", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Hevellyn Victorya Pereira Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kaylane Pereira Bispo", "setor": "LOGÍSTICA", "subarea": "ANALISTA TROCAS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "16:30"}, {"nome": "Vithorya Cristina Carneiro Ribeiro Reco", "setor": "ACABAMENTO", "subarea": "REVISÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ramilly Augusta Moura Macedo", "setor": "PRODUÇÃO", "subarea": "COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Giovana de Almeida Gouvea", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Brenda Ferreira Romao", "setor": "GENTE E GESTÃO", "subarea": "DP", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriela Alves Machado", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Lorraine Moreira", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "MARIA CLARA VELOSO CAMARA", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Stella Lima Brandão", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriela Moreira e Silva", "setor": "ESTILO", "subarea": "ESTILISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ellen Costa Oliveira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabriel da Silva Santos Costa", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Grayce Kelly Lopes da Silva", "setor": "GENTE E GESTÃO", "subarea": "RECEPÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda Martins Bastos", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "KAUAN COELHO MARTINS", "setor": "PRODUÇÃO", "subarea": "PRENSA TERMICA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Elizamar Soares Fagundes", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "MATHEUS DE CASTRO OLIVEIRA", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mayra Michelly Oliveira de Oliveira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gabrielly Rocha Mendes Mota", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Gleicilene Almeida Santos", "setor": "PRODUÇÃO", "subarea": "MODELISTA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "CAWAN HENRIQUE CESAR SILVA SOUSA", "setor": "LOGÍSTICA", "subarea": "SEPARADOR", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "ISABELLA GUIMARAES FERREIRA", "setor": "ACABAMENTO", "subarea": "LINHA/EMBALAGEM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Souza Silva", "setor": "LOGÍSTICA", "subarea": "TROCAS E DEVOLUÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Beatriz Ribeiro de Souza", "setor": "LOGÍSTICA", "subarea": "ESTOQUE", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Valdeci Matias da Silva", "setor": "GENTE E GESTÃO", "subarea": "MANUTENÇÃO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vitória Protti Eid", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE ENG. PROD.", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Carolina Pinheiro Cardoso", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mariana de Assis Ferreira", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Maria Eduarda de Oliveira Benevides Lopes", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Fernanda Araujo da Silva", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Elissa Santos Garcia", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Isaac David Figueiredo Cunha", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Marcelo Junior Pinheiro Cardoso", "setor": "PRODUÇÃO", "subarea": "ASSISTENTE COSTURA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Vinicius Brandao de Oliveira", "setor": "LOGÍSTICA", "subarea": "FISCAL DE PÁTIO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Valkiria Rodrigues Meira", "setor": "COMERCIAL", "subarea": "COMERCIAL", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Kattely Karoline Santos", "setor": "LOGÍSTICA", "subarea": "EMBALADORA", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Ana Francisca de Sousa Santos", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Igor Augusto Ferreira Sampaio", "setor": "DADOS", "subarea": "TI/DADOS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Isabella Oliveira de Jesus", "setor": "CRM", "subarea": "CRM", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Andreia Marques Pinto", "setor": "ADMINISTRATIVO", "subarea": "COMPRAS", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}, {"nome": "Mateus Henrique da Silva", "setor": "DESLIGADO", "subarea": "DESLIGADO", "tipo": "MENSALISTA", "entrada": "08:00", "saida": "18:00"}];
 </script>
 <script>
 /* ============================================================
@@ -342,6 +387,32 @@ const norm=s=>(s||'').toString().trim().toLowerCase().normalize('NFD').replace(/
 const toMin=t=>{if(!t)return null;const neg=t[0]==='-';const p=t.replace('-','').split(':');const m=(+p[0])*60+(+p[1]);return isNaN(m)?null:(neg?-m:m);};
 const hhmm=m=>{if(m==null)return'—';const n=m<0;m=Math.abs(m);return(n?'-':'')+String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');};
 const el=id=>document.getElementById(id);
+/* ---------- glossário / tooltips de ajuda ---------- */
+const GLOSSARIO={
+  tolerancia:`Todos os cálculos já descontam uma <b>tolerância de ±10 minutos</b> por batida (padrão de oscilação aceitável). Só é marcado desvio o que passa disso.`,
+  conforme:`Registro dentro das regras de horário do colaborador, considerando a tolerância de ±10min. Entrou, almoçou e saiu no tempo esperado.`,
+  irregHorario:`Desvio real de horário além dos 10min de tolerância: <b>atraso na entrada</b>, <b>saída antecipada</b> ou <b>almoço acima do limite</b>. Impacta a produtividade.`,
+  irregRegistro:`O colaborador <b>esqueceu de bater um ponto</b> (quase sempre a volta do almoço) — o sistema só achou a batida do fim do dia, fazendo o almoço parecer irreal (>2h). É falha de registro, não de produtividade. Conta como irregularidade, mas <b>não</b> como hora perdida.`,
+  ausente:`Dia sem batida por falta, folga, férias ou atestado — conforme lançado pelo DP no relatório.`,
+  atrasoEntrada:`Diferença entre a batida de entrada real e o horário de entrada do colaborador, além da tolerância de 10min. Ex.: ref 08:00, bateu 08:25 → +15min de atraso.`,
+  almocoExtra:`Tempo de almoço que ultrapassou o limite. Para a <b>Logística</b>, o horário é fixo (retorno 13:00). Para as <b>demais áreas</b>, conta a duração (até 1h). Sempre descontando 10min de tolerância.`,
+  saidaAntec:`Quando o colaborador sai antes do horário previsto, além dos 10min de tolerância. Ex.: ref 18:00, saiu 17:40 → 20min antes.`,
+  horaPerdida:`<b>Passivo de produtividade:</b> soma dos minutos que deveriam estar em serviço e não estavam — atraso na entrada + almoço além do limite + saída antecipada. Já descontada a tolerância. <b>Não inclui</b> esquecimento de batida.`,
+  horaGerada:`<b>Passivo financeiro:</b> tempo trabalhado <b>sem justificativa/autorização</b> que vira hora extra — entrada adiantada, retorno de almoço adiantado ou saída após o horário. Gera custo de HE não autorizada.`,
+  aderencia:`% de registros <b>conformes</b> sobre o total de presenças (conformes + irregulares). Não conta ausências. Padrão de mercado: 🟢 ≥80% saudável · 🟡 60-79% atenção · 🔴 <60% crítico.`,
+  perdidaPessoa:`Horas perdidas do setor <b>divididas pelo nº de pessoas</b> da equipe. É o número que permite comparar setores de tamanhos diferentes de forma justa — um setor de 2 pessoas e outro de 40 não podem ser comparados pelo total bruto.`,
+  reincidente:`Colaborador com <b>2 ou mais irregularidades</b> no período analisado. Quanto mais ocorrências, maior a prioridade de acompanhamento e a escala de ação (conversa → feedback → advertência).`,
+  tendencia:`Compara a frequência de irregularidades na 1ª metade vs. 2ª metade do período. Só afirma <b>piora</b>/<b>melhora</b> com dados suficientes nas duas metades. Uma ocorrência isolada no fim é marcada como <b>recente</b> (possível evento pontual), não como piora.`,
+  diaCheio:`Só entram na análise os dias <b>fechados</b>: aqueles em que ≥70% dos presentes já bateram a saída. Um relatório tirado durante o expediente tem o dia atual descartado — não dá para avaliar atraso/falta num dia que ainda não terminou.`,
+  esqueceu:`O colaborador saiu para o almoço mas não registrou a volta; o próximo ponto é o do fim do dia. O almoço aparece irreal (>2h). É cobrado como irregularidade de registro, mas não penaliza horas perdidas.`,
+  homeoffice:`Colaborador remoto — não está sujeito à métrica de ponto presencial. As batidas são informativas e não geram irregularidade nem hora perdida.`,
+  horista:`Remunerado por hora trabalhada. Não entra na escala de folgas para abatimento de banco de horas; eventual saldo é compensado via pagamento.`
+};
+function help(chave,pos){
+  const t=GLOSSARIO[chave]||'';
+  const cls=pos==='left'?' tip-left':pos==='right'?' tip-right':'';
+  return `<span class="help${cls}">ⓘ<span class="tip">${t}</span></span>`;
+}
 const dfmt=d=>d.slice(8,10)+'/'+d.slice(5,7);
 const primeiroNome=n=>{const p=(n||'').split(/\s+/);return p[0]+(p[1]?' '+p[1]:'');};
 
@@ -353,6 +424,7 @@ function findBase(nome){
 }
 function isSexta(data){const d=new Date(data+'T12:00:00');return d.getDay()===5;}
 function diaSemana(data){return ['domingo','segunda-feira','terça-feira','quarta-feira','quinta-feira','sexta-feira','sábado'][new Date(data+'T12:00:00').getDay()];}
+function headcountSetor(setor){return BASE.filter(b=>b.setor===setor&&b.setor!=='DESLIGADO').length;}
 
 /* ---------- base ---------- */
 async function carregarBase(){
@@ -405,12 +477,48 @@ function parsePonto(rows){
       }
     }
   }
-  return recs.filter(r=>r.nome).map(avaliar);
+  const validos=recs.filter(r=>r.nome).map(avaliar);
+  // DESLIGADO: cortar registros após o último ponto efetivamente batido
+  // (tudo depois disso é ausência-fantasma que não existe)
+  const ultimoPonto={};
+  validos.forEach(r=>{
+    if(r.setor==='DESLIGADO' && (r.entrada||r.saidaInt||r.retInt||r.saida)){
+      if(!ultimoPonto[r.nome]||r.data>ultimoPonto[r.nome]) ultimoPonto[r.nome]=r.data;
+    }
+  });
+  const semDesligado=validos.filter(r=>{
+    if(r.setor!=='DESLIGADO') return true;
+    const lim=ultimoPonto[r.nome];
+    if(!lim) return false;           // desligado sem nenhum ponto no período → fora
+    return r.data<=lim;              // mantém só até o último ponto real
+  });
+  // DIA CHEIO: só considera dias onde ≥70% dos presentes têm saída registrada.
+  // Dia parcial (relatório tirado durante o expediente) é descartado — não dá
+  // para dizer que alguém atrasou ou faltou num dia que ainda está acontecendo.
+  const DIA_CHEIO_PCT=0.70;
+  const porData={};
+  semDesligado.forEach(r=>{
+    if(!porData[r.data])porData[r.data]={presentes:0,comSaida:0};
+    if(r.entrada||r.saidaInt||r.saida){porData[r.data].presentes++; if(r.saida)porData[r.data].comSaida++;}
+  });
+  const diasCheios=new Set(Object.entries(porData)
+    .filter(([,v])=>v.presentes>0 && v.comSaida/v.presentes>=DIA_CHEIO_PCT)
+    .map(([d])=>d));
+  const resultado=semDesligado.filter(r=>diasCheios.has(r.data));
+  // expõe metadados para o banner informar quais dias foram descartados
+  resultado.__diasCheios=[...diasCheios].sort();
+  resultado.__diasParciais=Object.keys(porData).filter(d=>!diasCheios.has(d)&&porData[d].presentes>0).sort();
+  return resultado;
 }
 
 function avaliar(r){
   const b=findBase(r.nome);
   const setor=b?b.setor:'(sem cadastro)', sub=b?b.subarea:'(sem cadastro)', tipo=b?b.tipo:'MENSALISTA';
+  // HOME OFFICE: não se enquadra na métrica de ponto presencial → sempre conforme
+  if(tipo==='HOME OFFICE'){
+    return {...r,setor,sub,tipo,isLog:false,refE:'—',refS:'—',dE:null,dS:null,dR:null,durAlm:null,
+      flags:[],detalhe:{},situacao:'ok',status:'🏠 Home office',homeoffice:true,horasPerdidas:0,horasGeradas:0};
+  }
   const isLog=setor==='LOGÍSTICA';
   const refE=b?b.entrada:'08:00';
   let refS=b?b.saida:'18:00';
@@ -418,17 +526,31 @@ function avaliar(r){
 
   const flags=[]; const detalhe={};
   let dE=null,dS=null,durAlm=null,dR=null;
-  if(r.entrada){dE=toMin(r.entrada)-toMin(refE); if(dE>TOL)flags.push('Entrada +'+dE+'min'); detalhe.entrada={real:r.entrada,ref:refE,delta:dE};}
-  if(r.saida){dS=toMin(r.saida)-toMin(refS); if(dS<-TOL)flags.push('Saída '+Math.abs(dS)+'min antes'); detalhe.saida={real:r.saida,ref:refS,delta:dS};}
-  if(r.saidaInt&&r.retInt){
-    durAlm=toMin(r.retInt)-toMin(r.saidaInt);
-    if(isLog){ dR=toMin(r.retInt)-toMin('13:00'); if(dR>TOL)flags.push('Ret. almoço +'+dR+'min'); detalhe.almoco={tipo:'fixo',real:r.retInt,ref:'13:00',delta:dR,dur:durAlm}; }
-    else{ const extra=durAlm-60; if(extra>TOL)flags.push('Almoço '+durAlm+'min (+'+extra+'min)'); detalhe.almoco={tipo:'duracao',dur:durAlm,extra}; }
+  let horasPerdidas=0, horasGeradas=0;
+  let esqueceu=false; // esqueceu de bater o retorno do almoço (almoço irreal >2h)
+  const ALMOCO_IRREAL=120;
+  // detectar esquecimento ANTES de qualquer cálculo de almoço
+  if(r.saidaInt&&r.retInt){ durAlm=toMin(r.retInt)-toMin(r.saidaInt); if(durAlm>ALMOCO_IRREAL) esqueceu=true; }
+
+  if(r.entrada){dE=toMin(r.entrada)-toMin(refE); if(dE>TOL){flags.push('Entrada +'+dE+'min');horasPerdidas+=dE;} else if(dE<-TOL){horasGeradas+=Math.abs(dE);} detalhe.entrada={real:r.entrada,ref:refE,delta:dE};}
+  // saída e almoço só entram nos cálculos se NÃO houve esquecimento (senão os números são fantasia)
+  if(!esqueceu){
+    if(r.saida){dS=toMin(r.saida)-toMin(refS); if(dS<-TOL){flags.push('Saída '+Math.abs(dS)+'min antes');horasPerdidas+=Math.abs(dS);} else if(dS>TOL){horasGeradas+=dS;} detalhe.saida={real:r.saida,ref:refS,delta:dS};}
+    if(r.saidaInt&&r.retInt){
+      if(isLog){ dR=toMin(r.retInt)-toMin('13:00'); if(dR>TOL){flags.push('Ret. almoço +'+dR+'min');horasPerdidas+=dR;} else if(dR<-TOL){horasGeradas+=Math.abs(dR);} detalhe.almoco={tipo:'fixo',real:r.retInt,ref:'13:00',delta:dR,dur:durAlm}; }
+      else{ const extra=durAlm-60; if(extra>TOL){flags.push('Almoço '+durAlm+'min (+'+extra+'min)');horasPerdidas+=extra;} else if(extra<-TOL){horasGeradas+=Math.abs(extra);} detalhe.almoco={tipo:'duracao',dur:durAlm,extra}; }
+    }
+  } else {
+    detalhe.almoco={tipo:'esquecido',dur:durAlm,saidaInt:r.saidaInt,retInt:r.retInt};
+    if(r.saida) detalhe.saida={real:r.saida,ref:refS,delta:toMin(r.saida)-toMin(refS)};
+    // batidas embaralhadas → qualquer penalidade de horas é ruído. Zera tudo e limpa flags de horário.
+    horasPerdidas=0; horasGeradas=0; flags.length=0;
   }
   let situacao='ok',status='✅ Conforme';
   if(r.obs){situacao='aus';status='📋 '+r.obs;}
+  else if(esqueceu){situacao='esq';status='🕳 Esqueceu de bater ponto';}
   else if(flags.length){situacao='nok';status='⚠️ '+flags.join(' · ');}
-  return {...r,setor,sub,tipo,isLog,refE,refS,dE,dS,dR,durAlm,flags,detalhe,situacao,status};
+  return {...r,setor,sub,tipo,isLog,refE,refS,dE,dS,dR,durAlm,flags,detalhe,situacao,status,horasPerdidas,horasGeradas,esqueceu};
 }
 
 function parseBanco(rows){
@@ -466,9 +588,12 @@ function perfilColab(nome){
   const b=findBase(nome);
   const dias=[...new Set(regs.map(r=>r.data))].sort();
   const porDia=dias.map(d=>{const rr=regs.filter(x=>x.data===d);
-    const nok=rr.some(x=>x.situacao==='nok'); const aus=rr.every(x=>x.situacao==='aus')&&rr.length>0;
+    // dia problemático = tem irregularidade de horário OU de registro (esquecimento)
+    const nok=rr.some(x=>x.situacao==='nok'||x.situacao==='esq'); const aus=rr.every(x=>x.situacao==='aus')&&rr.length>0;
     return {data:d, nok, aus, regs:rr};});
-  const totNok=regs.filter(r=>r.situacao==='nok').length;
+  const totNokReal=regs.filter(r=>r.situacao==='nok').length;
+  const totEsq=regs.filter(r=>r.situacao==='esq').length;
+  const totNok=totNokReal+totEsq; // total de irregularidades (horário + registro)
   const totOk=regs.filter(r=>r.situacao==='ok').length;
   const totAus=regs.filter(r=>r.situacao==='aus').length;
   // tipos de ocorrência
@@ -476,42 +601,85 @@ function perfilColab(nome){
   regs.forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada')))cE++;
     if(r.flags.some(f=>f.includes('almoço')||f.includes('Almoço')))cR++;
     if(r.flags.some(f=>f.startsWith('Saída')))cS++;});
-  // tendência: comparar 1a metade vs 2a metade dos dias com registro
   const diasNok=porDia.filter(d=>d.regs.some(x=>x.situacao!=='aus'));
-  let tendencia='flat', tendTxt='estável';
-  if(diasNok.length>=4){
-    const meio=Math.floor(diasNok.length/2);
+  let tendencia='flat', tendTxt='estável', tendNota='';
+  // conta dias com irregularidade no total e nos últimos dias
+  const diasComProblema=diasNok.filter(d=>d.nok).length;
+  const ndias=diasNok.length;
+  // "problema recente pontual": poucas ocorrências no total, e concentradas no fim,
+  // sem dias suficientes DEPOIS para confirmar que virou tendência.
+  const idxUltimoProblema=diasNok.map(d=>d.nok).lastIndexOf(true);
+  const diasAposUltimoProblema=idxUltimoProblema>=0?(ndias-1-idxUltimoProblema):ndias;
+
+  if(ndias>=4 && diasComProblema>=2){
+    // só afirma tendência se houver amostra robusta nas duas metades
+    const meio=Math.floor(ndias/2);
     const taxa1=diasNok.slice(0,meio).filter(d=>d.nok).length/meio;
-    const taxa2=diasNok.slice(meio).filter(d=>d.nok).length/(diasNok.length-meio);
-    if(taxa2>taxa1+0.15){tendencia='up';tendTxt='piorando';}
-    else if(taxa2<taxa1-0.15){tendencia='down';tendTxt='melhorando';}
+    const taxa2=diasNok.slice(meio).filter(d=>d.nok).length/(ndias-meio);
+    // exige pelo menos 2 dias de dados na 2a metade para chamar de tendência
+    const dias2=ndias-meio;
+    if(dias2>=2){
+      if(taxa2>taxa1+0.15){tendencia='up';tendTxt='piorando';}
+      else if(taxa2<taxa1-0.15){tendencia='down';tendTxt='melhorando';}
+    }
+  }
+  // sobrepõe: se o(s) problema(s) estão só no final e não há dados posteriores suficientes,
+  // NÃO chama de tendência de piora — sinaliza como possível evento pontual.
+  const problemaSoRecente = diasComProblema<=2 && idxUltimoProblema>=ndias-2 && diasAposUltimoProblema<=1;
+  if(problemaSoRecente && diasComProblema>=1){
+    tendencia='recente';
+    tendTxt='ocorrência recente';
+    tendNota=`Atenção: a(s) ocorrência(s) estão concentradas no fim do período, sem dias posteriores suficientes para confirmar uma tendência. Pode ser um <b>atraso pontual</b> (ex.: consulta, imprevisto) ainda não justificado/lançado. Recomenda-se aguardar os próximos dias antes de concluir.`;
   }
   const taxaConf=(totOk+totNok)?Math.round(totOk/(totOk+totNok)*100):100;
-  return {nome,base:b,regs,dias,porDia,totOk,totNok,totAus,cE,cR,cS,tendencia,tendTxt,taxaConf};
+  return {nome,base:b,regs,dias,porDia,totOk,totNok,totNokReal,totEsq,totAus,cE,cR,cS,tendencia,tendTxt,tendNota,taxaConf};
 }
 
 /* ============================================================
-   MODAL
+   MODAL — com pilha de navegação (botão voltar)
    ============================================================ */
-function abrirModal(titulo,sub,htmlBody){
+let MODAL_STACK=[]; // guarda funções que reabrem os modais anteriores
+
+function abrirModal(titulo,sub,htmlBody,reabrir){
+  // reabrir: função que reconstrói ESTE modal (usada quando voltamos a ele)
+  const temVoltar=MODAL_STACK.length>0;
+  const btnVoltar=temVoltar?`<button class="close" id="mback" title="Voltar" style="right:62px;font-size:1rem">←</button>`:'';
   el('modalRoot').innerHTML=`<div class="modal-bg" id="mbg"><div class="modal">
     <div class="modal-hd"><h2>${titulo}</h2><div class="sub">${sub||''}</div>
-      <button class="close" id="mclose">×</button></div>
+      ${btnVoltar}<button class="close" id="mclose" title="Fechar">×</button></div>
     <div class="modal-bd">${htmlBody}</div></div></div>`;
   el('mbg').addEventListener('click',e=>{if(e.target.id==='mbg')fecharModal();});
   el('mclose').addEventListener('click',fecharModal);
+  if(temVoltar) el('mback').addEventListener('click',voltarModal);
   document.addEventListener('keydown',escClose);
+  // guarda o "reabridor" deste modal, para que o próximo possa voltar até aqui
+  window.__modalAtual=reabrir||null;
 }
+// navega para um novo modal, empilhando o atual
+function irPara(fn){ if(window.__modalAtual) MODAL_STACK.push(window.__modalAtual); limparChartsModal(); fn(); }
+function voltarModal(){ const anterior=MODAL_STACK.pop(); limparChartsModal(); if(anterior) anterior(); else fecharModal(); }
 function escClose(e){if(e.key==='Escape')fecharModal();}
-function fecharModal(){el('modalRoot').innerHTML='';document.removeEventListener('keydown',escClose);
-  // limpar charts do modal
-  Object.keys(charts).forEach(k=>{if(k.startsWith('m_')){charts[k].destroy();delete charts[k];}});}
+function limparChartsModal(){Object.keys(charts).forEach(k=>{if(k.startsWith('m_')){charts[k].destroy();delete charts[k];}});}
+function fecharModal(){el('modalRoot').innerHTML='';document.removeEventListener('keydown',escClose);MODAL_STACK=[];window.__modalAtual=null;limparChartsModal();}
 
 /* ---- modal de colaborador (o coração do drill-down) ---- */
 function modalColab(nome){
   const p=perfilColab(nome);
   const b=p.base;
   const setor=b?b.setor:'(sem cadastro)', sub=b?b.subarea:'', tipo=b?b.tipo:'MENSALISTA';
+
+  // HOME OFFICE: não se aplica métrica de ponto presencial
+  if(tipo==='HOME OFFICE'){
+    const body=`
+      <div class="acao-box info" style="background:#E0EFFF;border-color:#1A5FC4">🏠 <b>Colaborador home office.</b> ${nome} trabalha remotamente e <b>não está sujeito à métrica de ponto presencial</b>. As batidas registradas são apenas informativas e não geram irregularidade, hora perdida ou medida administrativa.</div>
+      <p style="font-size:.82rem;color:var(--cinza)">${setor} · ${sub} · <span class="pill" style="background:#E0EFFF;color:#1A5FC4">🏠 home office</span></p>
+      <h4>📋 Registros no período (informativo)</h4>
+      <table class="mini-tbl"><thead><tr><th>Data</th><th>1ª batida</th><th>Última batida</th></tr></thead><tbody>
+      ${p.regs.map(r=>`<tr><td><b>${dfmt(r.data)}</b></td><td>${r.entrada||'—'}</td><td>${r.saida||'—'}</td></tr>`).join('')||'<tr><td colspan="3" style="text-align:center;color:var(--cinza)">Sem registros.</td></tr>'}
+      </tbody></table>`;
+    abrirModal('👤 '+nome, setor+' · '+sub+' · Home office', body, ()=>modalColab(nome));
+    return;
+  }
 
   // diagnóstico textual
   let sev='info',diag='',acao='';
@@ -525,7 +693,12 @@ function modalColab(nome){
   const domTxt=dom[1]>0?`Padrão dominante: <b>${dom[0]}</b> (${dom[1]}x).`:'';
 
   // ação recomendada escalonada
-  if(p.totNok>=4){acao=`<div class="acao-box crit">🛑 <b>Medida administrativa recomendada.</b> Volume elevado e recorrente justifica <b>advertência formal por escrito</b>, precedida de conversa documentada. Registre no dossiê do colaborador.</div>`;}
+  if(p.tendencia==='recente' && p.totNok<=2){
+    // ocorrência recente e isolada no fim → não escalar; aguardar justificativa
+    sev='warn';
+    acao=`<div class="acao-box warn">🆕 <b>Aguardar antes de agir.</b> A ocorrência é recente e isolada no fim do período. Pode ser um imprevisto pontual (consulta, trânsito) ainda não justificado ou lançado pelo DP. <b>Verifique se há justificativa</b> antes de qualquer conversa formal — agir cedo demais sobre um caso pontual desgasta a relação.</div>`;
+  }
+  else if(p.totNok>=4){acao=`<div class="acao-box crit">🛑 <b>Medida administrativa recomendada.</b> Volume elevado e recorrente justifica <b>advertência formal por escrito</b>, precedida de conversa documentada. Registre no dossiê do colaborador.</div>`;}
   else if(p.totNok===3){acao=`<div class="acao-box crit">⚠️ <b>Feedback formal + advertência verbal documentada.</b> Deixe claro o impacto na operação e registre a conversa. Próxima reincidência → advertência escrita.</div>`;}
   else if(p.totNok===2){acao=`<div class="acao-box warn">💬 <b>Conversa de alinhamento.</b> Aborde de forma preventiva, entenda a causa (transporte, saúde, escala) e reforce a regra. Ainda não é caso de medida formal.</div>`;}
   else if(p.totNok===1){acao=`<div class="acao-box info">👀 <b>Apenas monitorar.</b> Uma ocorrência é dentro do esperado. Acompanhe os próximos dias antes de qualquer ação.</div>`;}
@@ -533,27 +706,38 @@ function modalColab(nome){
 
   // tendência
   let tendBox='';
-  if(p.tendencia==='up')tendBox=`<div class="acao-box crit">📈 <b>Tendência de piora.</b> A frequência de irregularidades aumentou na segunda metade do período. Priorize a conversa.</div>`;
+  if(p.tendencia==='up')tendBox=`<div class="acao-box crit">📈 <b>Tendência de piora.</b> A frequência de irregularidades aumentou de forma consistente ao longo do período (com dados suficientes para confirmar). Priorize a conversa.</div>`;
   else if(p.tendencia==='down')tendBox=`<div class="acao-box good">📉 <b>Tendência de melhora.</b> O colaborador vem reduzindo as ocorrências. Vale um reforço positivo.</div>`;
+  else if(p.tendencia==='recente')tendBox=`<div class="acao-box warn">🆕 <b>Ocorrência recente — cautela na leitura.</b> ${p.tendNota}</div>`;
   else tendBox=`<div class="acao-box info">➡️ <b>Comportamento estável</b> no período.</div>`;
 
-  // tabela de ocorrências
-  const linhasNok=p.regs.filter(r=>r.situacao==='nok').map(r=>`<tr>
-    <td><b>${dfmt(r.data)}</b></td><td>${r.entrada||'—'}</td><td>${r.retInt||'—'}</td><td>${r.saida||'—'}</td>
-    <td style="color:var(--vermelho);font-weight:700">${r.flags.join(' · ')}</td></tr>`).join('')
+  // tabela de ocorrências (inclui irregularidades de horário E de registro)
+  const linhasNok=p.regs.filter(r=>r.situacao==='nok'||r.situacao==='esq').map(r=>`<tr>
+    <td><b>${dfmt(r.data)}</b></td><td>${r.entrada||'—'}</td><td>${r.situacao==='esq'?'🕳 —':(r.retInt||'—')}</td><td>${r.saida||'—'}</td>
+    <td style="color:${r.situacao==='esq'?'#6B21C7':'var(--vermelho)'};font-weight:700">${r.situacao==='esq'?'🕳 Esqueceu de bater ponto':r.flags.join(' · ')}</td></tr>`).join('')
     ||'<tr><td colspan="5" style="text-align:center;color:var(--cinza)">Nenhuma irregularidade.</td></tr>';
+
+  // detalhamento do tipo de irregularidade
+  let breakdown='';
+  if(p.totNok>0){
+    const partes=[];
+    if(p.totNokReal>0)partes.push(`${p.totNokReal} de horário (atraso/saída)`);
+    if(p.totEsq>0)partes.push(`${p.totEsq} de registro (esqueceu de bater)`);
+    breakdown=` Sendo ${partes.join(' e ')}.`;
+  }
 
   const body=`
     <div class="mstat">
       <div class="b"><div class="v">${p.taxaConf}%</div><div class="k">Conformidade</div></div>
       <div class="b verde"><div class="v">${p.totOk}</div><div class="k">Conformes</div></div>
       <div class="b verm"><div class="v">${p.totNok}</div><div class="k">Irregulares</div></div>
+      <div class="b" style="background:#EAE0FF"><div class="v" style="color:#6B21C7">${p.totEsq}</div><div class="k">🕳 Esq. registro</div></div>
       <div class="b laranja"><div class="v">${p.totAus}</div><div class="k">Ausências</div></div>
     </div>
     <p style="font-size:.82rem;color:var(--cinza)">${setor} · ${sub} ${tipo==='HORISTA'?'· <span class="pill horista">horista</span>':''} · Horário ref.: ${b?b.entrada:'08:00'}–${b?b.saida:'18:00'}</p>
 
     <h4>🩺 Diagnóstico</h4>
-    <div class="acao-box ${sev}">${diag} ${domTxt}</div>
+    <div class="acao-box ${sev}">${diag}${breakdown} ${domTxt}</div>
 
     <h4>📊 Tendência</h4>
     ${tendBox}
@@ -566,7 +750,7 @@ function modalColab(nome){
     <table class="mini-tbl"><thead><tr><th>Data</th><th>Entrada</th><th>Ret. almoço</th><th>Saída</th><th>Ocorrência</th></tr></thead>
     <tbody>${linhasNok}</tbody></table>`;
 
-  abrirModal('👤 '+nome, setor+' · '+sub, body);
+  abrirModal('👤 '+nome, setor+' · '+sub, body, ()=>modalColab(nome));
 
   // gráfico de tendência (status por dia: 0 ausente, 1 conforme, -1 irregular)
   const labels=p.porDia.map(d=>dfmt(d.data));
@@ -593,24 +777,37 @@ function pontoFiltrado(){
 
 function renderPonto(){
   const dados=pontoFiltrado();
-  const ok=dados.filter(r=>r.situacao==='ok').length, nok=dados.filter(r=>r.situacao==='nok').length, aus=dados.filter(r=>r.situacao==='aus').length;
-  const taxa=(ok+nok)?Math.round(ok/(ok+nok)*100):0;
+  const ok=dados.filter(r=>r.situacao==='ok').length, nok=dados.filter(r=>r.situacao==='nok').length;
+  const aus=dados.filter(r=>r.situacao==='aus').length, esq=dados.filter(r=>r.situacao==='esq').length;
+  // taxa de conformidade: esquecimento também é não conformidade
+  const presenca=ok+nok+esq;
+  const taxa=presenca?Math.round(ok/presenca*100):0;
   const nomesUnicos=new Set(dados.map(r=>r.nome)).size;
 
   const stf=el('fStatus').value;
   el('kpisPonto').innerHTML=`
-    <button class="kpi ${stf===''?'on':''}" data-k=""><div class="n">${dados.length}</div><div class="l">Registros</div><div class="sub">${nomesUnicos} colaboradores</div><div class="clickhint">clique: ver todos</div></button>
-    <button class="kpi verde ${stf==='ok'?'on':''}" data-k="ok"><div class="n">${ok}</div><div class="l">✅ Conformes</div><div class="sub">taxa ${taxa}%</div><div class="clickhint">clique: filtrar</div></button>
-    <button class="kpi verm ${stf==='nok'?'on':''}" data-k="nok"><div class="n">${nok}</div><div class="l">⚠️ Irregulares</div><div class="sub">fora da regra (±${TOL}min)</div><div class="clickhint">clique: filtrar</div></button>
-    <button class="kpi laranja ${stf==='aus'?'on':''}" data-k="aus"><div class="n">${aus}</div><div class="l">📋 Ausentes/Obs</div><div class="sub">falta, folga, atestado</div><div class="clickhint">clique: filtrar</div></button>`;
+    <button class="kpi ${stf===''?'on':''}" data-k=""><div class="n">${dados.length}</div><div class="l">Registros ${help('diaCheio')}</div><div class="sub">${nomesUnicos} colaboradores</div><div class="clickhint">clique: ver todos</div></button>
+    <button class="kpi verde ${stf==='ok'?'on':''}" data-k="ok"><div class="n">${ok}</div><div class="l">✅ Conformes ${help('conforme')}</div><div class="sub">taxa ${taxa}%</div><div class="clickhint">clique: filtrar</div></button>
+    <button class="kpi verm ${stf==='nok'?'on':''}" data-k="nok"><div class="n">${nok}</div><div class="l">⚠️ Irregul. de horário ${help('irregHorario')}</div><div class="sub">atraso/saída fora da regra</div><div class="clickhint">clique: filtrar</div></button>
+    <button class="kpi ${stf==='esq'?'on':''}" style="border-left-color:#6B21C7" data-k="esq"><div class="n" style="color:#6B21C7">${esq}</div><div class="l">🕳 Irregul. de registro ${help('irregRegistro')}</div><div class="sub">esqueceu de bater ponto</div><div class="clickhint">clique: filtrar</div></button>
+    <button class="kpi laranja ${stf==='aus'?'on':''}" data-k="aus"><div class="n">${aus}</div><div class="l">📋 Ausentes/Obs ${help('ausente','right')}</div><div class="sub">falta, folga, atestado</div><div class="clickhint">clique: filtrar</div></button>`;
   document.querySelectorAll('#kpisPonto .kpi').forEach(k=>k.addEventListener('click',()=>{
     el('fStatus').value=k.dataset.k; renderPonto();
   }));
+
+  el('legendaPonto').innerHTML=`
+    <div class="it"><span class="sw" style="background:var(--verde)"></span><b>Conforme</b> ${help('conforme')}</div>
+    <div class="it"><span class="sw" style="background:var(--vermelho)"></span><b>Irregul. horário</b> ${help('irregHorario')}</div>
+    <div class="it"><span class="sw" style="background:#6B21C7"></span><b>Irregul. registro</b> ${help('irregRegistro')}</div>
+    <div class="it"><span class="sw" style="background:var(--laranja)"></span><b>Ausente</b> ${help('ausente')}</div>
+    <div class="it">⏱ <b>Tolerância ±10min</b> ${help('tolerancia')}</div>
+    <div class="it">📅 <b>Só dias fechados</b> ${help('diaCheio','right')}</div>`;
 
   renderResumoColab(dados);
   renderInsightsPonto(dados);
   renderWatchPonto();
   renderChartsPonto(dados);
+  renderConsol(dados);
   renderTablePonto(dados);
 }
 
@@ -620,8 +817,8 @@ function renderResumoColab(dados){
   const nomes=[...new Set(dados.map(r=>r.nome))];
   if(!nm||nomes.length!==1){box.innerHTML='';return;}
   const p=perfilColab(nomes[0]);
-  const tclass=p.tendencia==='up'?'tr-up':p.tendencia==='down'?'tr-down':'tr-flat';
-  const tico=p.tendencia==='up'?'📈':p.tendencia==='down'?'📉':'➡️';
+  const tclass=p.tendencia==='up'?'tr-up':p.tendencia==='down'?'tr-down':p.tendencia==='recente'?'tr-up':'tr-flat';
+  const tico=p.tendencia==='up'?'📈':p.tendencia==='down'?'📉':p.tendencia==='recente'?'🆕':'➡️';
   box.innerHTML=`<div class="card" style="border-left:5px solid var(--roxo)">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px">
       <div><h3 style="margin:0">👤 ${nomes[0]}</h3>
@@ -650,6 +847,9 @@ function renderInsightsPonto(dados){
   if(pior&&pior[1]>0)ins.push({c:'warn',ic:'🏭',key:'setor',extra:pior[0],t:`Setor com maior taxa de irregularidade: <b>${pior[0]}</b> (${Math.round(pior[1]*100)}%).<div class="meta">Clique para ver os registros do setor.</div>`});
   const ext=dados.filter(r=>r.flags.some(f=>{const m=f.match(/\+(\d+)min/);return m&&+m[1]>120;}));
   if(ext.length)ins.push({c:'crit',ic:'🚨',key:'ext',t:`<b>${ext.length} registro(s) com desvio acima de 2h</b> — provável erro/esquecimento de batida.<div class="meta">Clique para revisar caso a caso.</div>`});
+  const esqL=dados.filter(r=>r.situacao==='esq');
+  if(esqL.length){const cnt={};esqL.forEach(r=>{cnt[r.nome]=(cnt[r.nome]||0)+1;});const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
+    ins.push({c:'',ic:'🕳',key:'esq',t:`<b>${esqL.length} caso(s) de esquecimento de batida</b> (almoço não fechado). Destaque: <b>${top[0]}</b> (${top[1]}x).<div class="meta">Não conta como hora perdida — clique para ver e orientar a equipe.</div>`});}
   if(dados.length&&!nok.length)ins.push({c:'good',ic:'🎉',key:'ok',t:`<b>Nenhuma irregularidade</b> neste recorte. Equipe em dia!`});
   if(!ins.length)ins.push({c:'',ic:'ℹ️',key:'',t:'Sem dados suficientes para insights neste filtro.'});
   box.innerHTML=ins.map((x,i)=>`<div class="insight ${x.c}" data-i="${i}"><div class="ic">${x.ic}</div><div class="txt">${x.t}</div>${x.key?'<div class="arrow">›</div>':''}</div>`).join('');
@@ -664,9 +864,9 @@ function modalInsight(ins,dados){
     const arr=Object.entries(cnt).filter(([,v])=>v.n>=2).sort((a,b)=>b[1].n-a[1].n);
     body=`<p>Colaboradores com <b>2 ou mais irregularidades</b> no período. Priorize de cima para baixo.</p>
       <table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Setor</th><th>Ocorr.</th><th>Datas</th></tr></thead><tbody>
-      ${arr.map(([n,v])=>`<tr><td class="tbl-link" onclick="fecharModal();modalColab('${n.replace(/'/g,"\\'")}')"><b>${n}</b></td><td>${v.setor}</td><td style="color:var(--vermelho);font-weight:700">${v.n}x</td><td style="font-size:.74rem">${[...new Set(v.datas)].join(', ')}</td></tr>`).join('')}
+      ${arr.map(([n,v])=>`<tr><td class="tbl-link" onclick="irPara(()=>modalColab('${n.replace(/'/g,"\\'")}'))"><b>${n}</b></td><td>${v.setor}</td><td style="color:var(--vermelho);font-weight:700">${v.n}x</td><td style="font-size:.74rem">${[...new Set(v.datas)].join(', ')}</td></tr>`).join('')}
       </tbody></table><p style="font-size:.8rem;color:var(--cinza);margin-top:10px">💡 Clique num nome para o diagnóstico individual com ação recomendada.</p>`;
-    abrirModal('🔁 Colaboradores reincidentes',arr.length+' com 2+ ocorrências',body);
+    abrirModal('🔁 Colaboradores reincidentes',arr.length+' com 2+ ocorrências',body,()=>modalInsight(ins,dados));
   }else if(ins.key==='tipo'){
     let cE=0,cR=0,cS=0;const le=[],lr=[],ls=[];
     nok.forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada'))){cE++;le.push(r);}if(r.flags.some(f=>/almo[çc]o/i.test(f))){cR++;lr.push(r);}if(r.flags.some(f=>f.startsWith('Saída'))){cS++;ls.push(r);}});
@@ -678,56 +878,160 @@ function modalInsight(ins,dados){
       <h4>🚪 Atrasos de entrada</h4>${miniList(le)}
       <h4>🍽 Almoço acima do limite</h4>${miniList(lr)}
       <h4>🏃 Saídas antecipadas</h4>${miniList(ls)}`;
-    abrirModal('⏰ Tipos de ocorrência',tot+' irregularidades',body);
+    abrirModal('⏰ Tipos de ocorrência',tot+' irregularidades',body,()=>modalInsight(ins,dados));
   }else if(ins.key==='setor'){
     const rs=dados.filter(r=>r.setor===ins.extra&&r.situacao==='nok');
     body=`<p>Registros irregulares do setor <b>${ins.extra}</b>.</p>${miniList(rs,true)}`;
-    abrirModal('🏭 '+ins.extra,rs.length+' irregularidades',body);
+    abrirModal('🏭 '+ins.extra,rs.length+' irregularidades',body,()=>modalInsight(ins,dados));
   }else if(ins.key==='ext'){
     const ext=dados.filter(r=>r.flags.some(f=>{const m=f.match(/\+(\d+)min/);return m&&+m[1]>120;}));
     body=`<p><b>Desvios acima de 2 horas</b> — quase sempre indicam esquecimento de batida (ex.: não registrou volta do almoço). Recomenda-se validar no relógio antes de qualquer ação disciplinar.</p>${miniList(ext,true)}`;
-    abrirModal('🚨 Desvios extremos',ext.length+' registros para revisar',body);
+    abrirModal('🚨 Desvios extremos',ext.length+' registros para revisar',body,()=>modalInsight(ins,dados));
+  }else if(ins.key==='esq'){
+    const esqL=dados.filter(r=>r.situacao==='esq');
+    body=`<p>Casos em que o colaborador <b>bateu a saída para o almoço mas não registrou a volta</b> — o sistema só encontrou a batida do fim do dia, fazendo o almoço parecer irreal. <b>Não é hora perdida</b>, é falha de registro. Oriente a equipe a sempre bater os 4 pontos.</p>${miniList(esqL,true)}`;
+    abrirModal('🕳 Esquecimento de batida',esqL.length+' registros',body,()=>modalInsight(ins,dados));
   }else{abrirModal('🎉 Tudo certo','',`<p>Nenhuma irregularidade neste recorte.</p>`);}
 }
 function miniList(regs,showSetor){
   if(!regs.length)return '<p style="color:var(--cinza);font-size:.82rem">Nenhum.</p>';
   return `<table class="mini-tbl"><thead><tr><th>Data</th>${showSetor?'<th>Setor</th>':''}<th>Colaborador</th><th>Ocorrência</th></tr></thead><tbody>
-    ${regs.map(r=>`<tr><td><b>${dfmt(r.data)}</b></td>${showSetor?'<td>'+r.setor+'</td>':''}<td class="tbl-link" onclick="fecharModal();modalColab('${r.nome.replace(/'/g,"\\'")}')">${r.nome}</td><td style="color:var(--vermelho)">${r.flags.join(' · ')}</td></tr>`).join('')}
+    ${regs.map(r=>`<tr><td><b>${dfmt(r.data)}</b></td>${showSetor?'<td>'+r.setor+'</td>':''}<td class="tbl-link" onclick="irPara(()=>modalColab('${r.nome.replace(/'/g,"\\'")}'))">${r.nome}</td><td style="color:var(--vermelho)">${r.flags.join(' · ')}</td></tr>`).join('')}
     </tbody></table>`;
 }
 
 function renderWatchPonto(){
+  const hr=el('helpReinc'); if(hr) hr.innerHTML=help('reincidente');
   const box=el('watchPonto');const cnt={};
-  PONTO.filter(r=>r.situacao==='nok').forEach(r=>{if(!cnt[r.nome])cnt[r.nome]={n:0,setor:r.setor,sub:r.sub,datas:[]};cnt[r.nome].n++;cnt[r.nome].datas.push(dfmt(r.data));});
+  PONTO.filter(r=>r.situacao==='nok'||r.situacao==='esq').forEach(r=>{if(!cnt[r.nome])cnt[r.nome]={n:0,nEsq:0,setor:r.setor,sub:r.sub,datas:[]};cnt[r.nome].n++;if(r.situacao==='esq')cnt[r.nome].nEsq++;cnt[r.nome].datas.push(dfmt(r.data));});
   const arr=Object.entries(cnt).sort((a,b)=>b[1].n-a[1].n);
   if(!arr.length){box.innerHTML='<p style="color:var(--cinza)">Nenhum colaborador com irregularidade recorrente. 👏</p>';return;}
   box.innerHTML=arr.slice(0,15).map(([nome,d])=>{
     const p=perfilColab(nome);
     const cls=d.n>=3?'crit':d.n>=2?'warn':'';
     const sev=d.n>=4?'🛑':d.n>=3?'⚠️':d.n>=2?'👀':'';
-    const tclass=p.tendencia==='up'?'tr-up':p.tendencia==='down'?'tr-down':'tr-flat';
-    const tico=p.tendencia==='up'?'📈 piorando':p.tendencia==='down'?'📉 melhorando':'➡️ estável';
+    const tclass=p.tendencia==='up'?'tr-up':p.tendencia==='down'?'tr-down':p.tendencia==='recente'?'tr-up':'tr-flat';
+    const tico=p.tendencia==='up'?'📈 piorando':p.tendencia==='down'?'📉 melhorando':p.tendencia==='recente'?'🆕 ocorr. recente':'➡️ estável';
+    const esqTxt=d.nEsq>0?` <span style="color:#6B21C7">(${d.nEsq}🕳)</span>`:'';
     return `<div class="wchip ${cls}" onclick="modalColab('${nome.replace(/'/g,"\\'")}')">
       <div class="sev">${sev}</div>
       <div class="nm">${nome}</div><div class="dt">${d.setor} · ${d.sub}</div>
-      <div class="bd">⚠️ ${d.n} irregularidade${d.n>1?'s':''}</div>
+      <div class="bd">⚠️ ${d.n} irregularidade${d.n>1?'s':''}${esqTxt}</div>
       <div class="tr ${tclass}">${tico} · conformidade ${p.taxaConf}%</div></div>`;
   }).join('');
 }
 
-/* ---------- CHARTS ricos ---------- */
-function renderChartsPonto(dados){
-  const setores=[...new Set(dados.map(r=>r.setor))].sort();
-  const okA=setores.map(s=>dados.filter(r=>r.setor===s&&r.situacao==='ok').length);
-  const nokA=setores.map(s=>dados.filter(r=>r.setor===s&&r.situacao==='nok').length);
-  const ausA=setores.map(s=>dados.filter(r=>r.setor===s&&r.situacao==='aus').length);
-  mkChart('chSetor','bar',{labels:setores,datasets:[
-    {label:'Conforme',data:okA,backgroundColor:'#1E9E5A'},
-    {label:'Irregular',data:nokA,backgroundColor:'#D63A4A'},
-    {label:'Ausente',data:ausA,backgroundColor:'#E8873B'}]},
-    {scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}},
-     plugins:{datalabels:false,tooltip:{callbacks:{footer:items=>{const s=setores[items[0].dataIndex];const t=okA[items[0].dataIndex]+nokA[items[0].dataIndex]+ausA[items[0].dataIndex];const conf=okA[items[0].dataIndex]+nokA[items[0].dataIndex];return 'Conformidade: '+(conf?Math.round(okA[items[0].dataIndex]/conf*100):0)+'%';}}}}});
+/* ---------- ANÁLISE ESTRATÉGICA por setor ---------- */
+function analiseSetor(dados){
+  const setores=[...new Set(dados.map(r=>r.setor))].filter(s=>s!=='(sem cadastro)').sort();
+  return setores.map(s=>{
+    const rr=dados.filter(r=>r.setor===s);
+    const presenca=rr.filter(r=>r.situacao!=='aus');
+    const ok=presenca.filter(r=>r.situacao==='ok').length;
+    const nokReal=presenca.filter(r=>r.situacao==='nok').length; // atraso de horário
+    const esq=presenca.filter(r=>r.situacao==='esq').length;     // falha de registro
+    const nok=nokReal+esq;                                        // toda não conformidade
+    const aus=rr.filter(r=>r.situacao==='aus').length;
+    const headcount=headcountSetor(s)||new Set(rr.map(r=>r.nome)).size;
+    const perdida=rr.reduce((a,r)=>a+(r.horasPerdidas||0),0);
+    const gerada=rr.reduce((a,r)=>a+(r.horasGeradas||0),0);
+    // aderência: conformes ÷ presenças (esquecimento entra como não conforme)
+    const aderencia=presenca.length?Math.round(ok/presenca.length*100):null;
+    const perdidaPorPessoa=headcount?perdida/headcount:0;
+    const ofc={};rr.filter(r=>r.horasPerdidas>0).forEach(r=>{ofc[r.nome]=(ofc[r.nome]||0)+r.horasPerdidas;});
+    const topOfensor=Object.entries(ofc).sort((a,b)=>b[1]-a[1])[0];
+    let cE=0,cR=0,cS=0;rr.forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada')))cE++;if(r.flags.some(f=>/almo[çc]o/i.test(f)))cR++;if(r.flags.some(f=>f.startsWith('Saída')))cS++;});
+    const prob=[['Atraso entrada',cE],['Almoço extra',cR],['Saída antecip.',cS],['Esqueceu de bater',esq]].sort((a,b)=>b[1]-a[1])[0];
+    return {setor:s,headcount,ok,nok,nokReal,esq,aus,total:rr.length,aderencia,perdida,gerada,perdidaPorPessoa,
+      topOfensor:topOfensor?{nome:topOfensor[0],min:topOfensor[1]}:null,
+      problema:prob[1]>0?prob[0]:'—'};
+  });
+}
 
+function renderEstrategico(dados){
+  const an=analiseSetor(dados).sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa);
+  const cols=['Setor','Equipe','Aderência '+help('aderencia'),'Irregul.','Problema principal','Horas perdidas '+help('horaPerdida'),'Perdida/pessoa '+help('perdidaPessoa'),'Geradas s/ justif. '+help('horaGerada'),'Maior ofensor'];
+  el('tblEstrategico').querySelector('thead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
+  const tb=el('tblEstrategico').querySelector('tbody');
+  if(!an.length){tb.innerHTML=`<tr><td colspan="9" class="empty"><div class="ic">🔍</div>Sem dados.</td></tr>`;return;}
+  tb.innerHTML=an.map(a=>{
+    const adCor=a.aderencia==null?'':a.aderencia>=80?'color:var(--verde);font-weight:800':a.aderencia>=60?'color:var(--amarelo-esc);font-weight:800':'color:var(--vermelho);font-weight:800';
+    const ppCor=a.perdidaPorPessoa>=30?'color:var(--vermelho);font-weight:800':a.perdidaPorPessoa>=15?'color:var(--laranja);font-weight:700':'color:var(--verde)';
+    const semaforo=a.aderencia==null?'⚪':a.aderencia>=80?'🟢':a.aderencia>=60?'🟡':'🔴';
+    return `<tr class="tbl-link" onclick="modalSetor('${a.setor}')">
+      <td><b>${semaforo} ${a.setor}</b></td>
+      <td>${a.headcount} pessoas</td>
+      <td style="${adCor}">${a.aderencia==null?'—':a.aderencia+'%'}</td>
+      <td>${a.nok} de ${a.ok+a.nok}</td>
+      <td>${a.problema}</td>
+      <td style="font-weight:700">${hhmm(a.perdida)}</td>
+      <td style="${ppCor}">${hhmm(Math.round(a.perdidaPorPessoa))}</td>
+      <td style="color:var(--roxo);font-weight:700">${hhmm(a.gerada)}</td>
+      <td style="font-size:.78rem">${a.topOfensor?a.topOfensor.nome.split(' ').slice(0,2).join(' ')+' ('+hhmm(a.topOfensor.min)+')':'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // KPIs de impacto agregado
+  const totP=an.reduce((s,a)=>s+a.perdida,0), totG=an.reduce((s,a)=>s+a.gerada,0);
+  const totHead=an.reduce((s,a)=>s+a.headcount,0);
+  const totOk=an.reduce((s,a)=>s+a.ok,0), totNok=an.reduce((s,a)=>s+a.nok,0);
+  const aderGeral=(totOk+totNok)?Math.round(totOk/(totOk+totNok)*100):0;
+  el('kpisImpacto').innerHTML=`
+    <div class="kpi" style="cursor:default"><div class="n">${aderGeral}%</div><div class="l">Aderência geral ${help('aderencia')}</div><div class="sub">${totOk} de ${totOk+totNok} pontuais</div></div>
+    <div class="kpi verm" style="cursor:default"><div class="n">${hhmm(totP)}</div><div class="l">⏳ Horas perdidas ${help('horaPerdida')}</div><div class="sub">${totHead?hhmm(Math.round(totP/totHead)):'—'} por colaborador</div></div>
+    <div class="kpi amarelo" style="cursor:default"><div class="n">${hhmm(totG)}</div><div class="l">💰 Geradas s/ justif. ${help('horaGerada')}</div><div class="sub">passivo de HE não autorizada</div></div>
+    <div class="kpi laranja" style="cursor:default"><div class="n">${an.filter(a=>a.aderencia!=null&&a.aderencia<60).length}</div><div class="l">🔴 Setores críticos ${help('aderencia','right')}</div><div class="sub">aderência abaixo de 60%</div></div>`;
+}
+
+function modalSetor(setor){
+  const dados=pontoFiltrado().filter(r=>r.setor===setor);
+  const a=analiseSetor(pontoFiltrado()).find(x=>x.setor===setor);
+  if(!a){return;}
+  // ranking de ofensores do setor
+  const ofc={};dados.filter(r=>r.horasPerdidas>0).forEach(r=>{if(!ofc[r.nome])ofc[r.nome]={min:0,n:0};ofc[r.nome].min+=r.horasPerdidas;ofc[r.nome].n++;});
+  const ofArr=Object.entries(ofc).sort((x,y)=>y[1].min-x[1].min);
+  const semaforo=a.aderencia==null?'⚪':a.aderencia>=80?'🟢':a.aderencia>=60?'🟡':'🔴';
+  let veredito;
+  if(a.aderencia==null)veredito=`<div class="acao-box info">Sem registros de presença suficientes para avaliar.</div>`;
+  else if(a.aderencia>=80)veredito=`<div class="acao-box good">🟢 <b>Setor saudável.</b> Aderência de ${a.aderencia}% está dentro do padrão de excelência (≥80%). Manter acompanhamento de rotina.</div>`;
+  else if(a.aderencia>=60)veredito=`<div class="acao-box warn">🟡 <b>Atenção.</b> Aderência de ${a.aderencia}% está em zona de alerta. Vale um alinhamento coletivo com a equipe e foco no problema dominante (${a.problema.toLowerCase()}).</div>`;
+  else veredito=`<div class="acao-box crit">🔴 <b>Setor crítico.</b> Apenas ${a.aderencia}% de aderência. Recomenda-se reunião com a liderança do setor, revisão de causas estruturais (escala, transporte) e plano de ação com prazo.</div>`;
+
+  const body=`
+    <div class="mstat">
+      <div class="b"><div class="v">${a.headcount}</div><div class="k">Equipe</div></div>
+      <div class="b ${a.aderencia>=80?'verde':a.aderencia>=60?'laranja':'verm'}"><div class="v">${a.aderencia==null?'—':a.aderencia+'%'}</div><div class="k">Aderência</div></div>
+      <div class="b verm"><div class="v">${hhmm(a.perdida)}</div><div class="k">H. perdidas</div></div>
+      <div class="b laranja"><div class="v">${hhmm(a.gerada)}</div><div class="k">H. s/ justif.</div></div>
+    </div>
+    <h4>🩺 Veredito</h4>${veredito}
+    <div class="acao-box info">📌 <b>Perdida por colaborador:</b> ${hhmm(Math.round(a.perdidaPorPessoa))} — este é o número que permite comparar setores de tamanhos diferentes de forma justa. Problema dominante: <b>${a.problema}</b>.</div>
+    <h4>🚨 Colaboradores que mais impactam</h4>
+    <table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Ocorr.</th><th>Horas perdidas</th></tr></thead><tbody>
+    ${ofArr.length?ofArr.map(([n,v])=>`<tr><td class="tbl-link" onclick="irPara(()=>modalColab('${n.replace(/'/g,"\\'")}'))"><b>${n}</b></td><td>${v.n}</td><td style="color:var(--vermelho);font-weight:700">${hhmm(v.min)}</td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--cinza)">Nenhum impacto de horas perdidas.</td></tr>'}
+    </tbody></table>`;
+  abrirModal(semaforo+' '+setor, a.headcount+' colaboradores · aderência '+(a.aderencia==null?'—':a.aderencia+'%'), body, ()=>modalSetor(setor));
+}
+
+/* ---------- CHARTS ---------- */
+function renderChartsPonto(dados){
+  renderEstrategico(dados);
+  const an=analiseSetor(dados);
+  const setores=an.map(a=>a.setor);
+
+  // Aderência proporcional (%) por setor — barra colorida por semáforo
+  mkChart('chSetor','bar',{labels:setores,datasets:[{label:'% Aderência',data:an.map(a=>a.aderencia),
+    backgroundColor:an.map(a=>a.aderencia==null?'#ccc':a.aderencia>=80?'#1E9E5A':a.aderencia>=60?'#F5C542':'#D63A4A')}]},
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>{const a=an[c.dataIndex];return [c.raw+'% aderência',a.headcount+' pessoas · '+a.nok+' irregulares'];}}}},
+     scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
+
+  // Impacto em horas — perdida vs gerada
+  mkChart('chImpacto','bar',{labels:setores,datasets:[
+    {label:'Perdidas (produtividade)',data:an.map(a=>+(a.perdida/60).toFixed(2)),backgroundColor:'#D63A4A'},
+    {label:'Geradas s/ justif. (passivo)',data:an.map(a=>+(a.gerada/60).toFixed(2)),backgroundColor:'#F5C542'}]},
+    {plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+hhmm(Math.round(c.raw*60))}}},scales:{y:{ticks:{callback:v=>v+'h'}}}});
+
+  // Tipo de ocorrência
   let cE=0,cR=0,cS=0;
   dados.filter(r=>r.situacao==='nok').forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada')))cE++;if(r.flags.some(f=>/almo[çc]o/i.test(f)))cR++;if(r.flags.some(f=>f.startsWith('Saída')))cS++;});
   const totT=cE+cR+cS||1;
@@ -735,20 +1039,104 @@ function renderChartsPonto(dados){
     datasets:[{data:[cE,cR,cS],backgroundColor:['#6B21C7','#B794E6','#F5C542'],borderWidth:2,borderColor:'#fff'}]},
     {cutout:'58%',plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:c=>c.label+' · '+Math.round(c.raw/totT*100)+'%'}}}});
 
-  // tendência diária
+  // Ranking pontualidade — esconde setores com pouquíssimos registros (ruído estatístico)
+  const rank=an.filter(a=>a.aderencia!=null && (a.ok+a.nok)>=3).sort((a,b)=>b.aderencia-a.aderencia);
+  mkChart('chRank','bar',{labels:rank.map(a=>a.setor),datasets:[{label:'% Conforme',data:rank.map(a=>a.aderencia),
+    backgroundColor:rank.map(a=>a.aderencia>=80?'#1E9E5A':a.aderencia>=60?'#F5C542':'#D63A4A')}]},
+    {indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'% ('+(rank[c.dataIndex].ok+rank[c.dataIndex].nok)+' registros)'}}},scales:{x:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
+
+  // Tendência diária
   const dias=[...new Set(dados.map(r=>r.data))].sort();
   const taxaDia=dias.map(d=>{const rr=dados.filter(r=>r.data===d&&r.situacao!=='aus');const ok=rr.filter(r=>r.situacao==='ok').length;return rr.length?Math.round(ok/rr.length*100):null;});
   mkChart('chTend','line',{labels:dias.map(dfmt),datasets:[{label:'% Conformidade',data:taxaDia,borderColor:'#6B21C7',
     backgroundColor:'rgba(107,33,199,.12)',fill:true,tension:.3,pointRadius:5,pointBackgroundColor:'#6B21C7',spanGaps:true}]},
-    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'% conformidade'}}},
-     scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'% conformidade'}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
 
-  // ranking pontualidade
-  const rank=setores.map(s=>{const rr=dados.filter(r=>r.setor===s&&r.situacao!=='aus');const ok=rr.filter(r=>r.situacao==='ok').length;return {s,taxa:rr.length?Math.round(ok/rr.length*100):0,n:rr.length};}).filter(x=>x.n>0).sort((a,b)=>b.taxa-a.taxa);
-  mkChart('chRank','bar',{labels:rank.map(x=>x.s),datasets:[{label:'% Conforme',data:rank.map(x=>x.taxa),
-    backgroundColor:rank.map(x=>x.taxa>=80?'#1E9E5A':x.taxa>=60?'#F5C542':'#D63A4A')}]},
-    {indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'% ('+rank[c.dataIndex].n+' registros)'}}},
-     scales:{x:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
+  // Top ofensores (horas perdidas por colaborador)
+  const ofc={};dados.filter(r=>r.horasPerdidas>0).forEach(r=>{ofc[r.nome]=(ofc[r.nome]||0)+r.horasPerdidas;});
+  const ofTop=Object.entries(ofc).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  mkChart('chOfensores','bar',{labels:ofTop.map(o=>primeiroNome(o[0])),datasets:[{label:'Min perdidos',data:ofTop.map(o=>o[1]),backgroundColor:'#D63A4A'}]},
+    {indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>hhmm(ofTop[c.dataIndex][1])+' perdidas'}}},scales:{x:{ticks:{callback:v=>hhmm(v)}}}});
+}
+
+/* ---------- RESUMO CONSOLIDADO por colaborador (médias) ---------- */
+let CONSOL_SORT={col:'nome',dir:1};
+function consolidar(dados){
+  const byC={};
+  dados.forEach(r=>{
+    if(!byC[r.nome])byC[r.nome]={nome:r.nome,setor:r.setor,sub:r.sub,tipo:r.tipo,dias:new Set(),
+      nOk:0,nNok:0,nAus:0,nEsq:0,nDesE:0,sE:0,nDesR:0,sR:0,nDesS:0,sS:0,perdida:0,gerada:0};
+    const c=byC[r.nome];c.dias.add(r.data);
+    if(r.situacao==='ok')c.nOk++; else if(r.situacao==='nok')c.nNok++; else if(r.situacao==='esq')c.nEsq++; else c.nAus++;
+    if(r.dE!=null&&r.dE>TOL){c.nDesE++;c.sE+=r.dE;}
+    const alm=r.detalhe.almoco;
+    if(alm&&alm.tipo!=='esquecido'){if(alm.tipo==='fixo'&&alm.delta>TOL){c.nDesR++;c.sR+=alm.delta;}
+      if(alm.tipo==='duracao'&&alm.extra>TOL){c.nDesR++;c.sR+=alm.extra;}}
+    if(r.dS!=null&&r.dS<-TOL&&!r.esqueceu){c.nDesS++;c.sS+=Math.abs(r.dS);}
+    c.perdida+=(r.horasPerdidas||0);c.gerada+=(r.horasGeradas||0);
+  });
+  return Object.values(byC).map(c=>({...c,
+    diasN:c.dias.size,
+    presenca:c.nOk+c.nNok,
+    aderencia:(c.nOk+c.nNok+c.nEsq)?Math.round(c.nOk/(c.nOk+c.nNok+c.nEsq)*100):null,
+    medE:c.nDesE?Math.round(c.sE/c.nDesE):null,
+    medR:c.nDesR?Math.round(c.sR/c.nDesR):null,
+    medS:c.nDesS?Math.round(c.sS/c.nDesS):null}));
+}
+
+function renderConsol(dados){
+  const arr=consolidar(dados);
+  const cols=[
+    {k:'nome',t:'Colaborador',al:'left'},
+    {k:'setor',t:'Setor',al:'left'},
+    {k:'diasN',t:'Dias'},
+    {k:'aderencia',t:'Aderência',h:'aderencia'},
+    {k:'nNok',t:'Irregul.',h:'irregHorario'},
+    {k:'nEsq',t:'🕳 Esqueceu',h:'irregRegistro'},
+    {k:'medE',t:'Méd. atraso entrada',h:'atrasoEntrada'},
+    {k:'medR',t:'Méd. almoço extra',h:'almocoExtra'},
+    {k:'medS',t:'Méd. saída antec.',h:'saidaAntec'},
+    {k:'perdida',t:'H. perdidas',h:'horaPerdida'},
+    {k:'gerada',t:'H. s/ justif.',h:'horaGerada'}];
+  el('tblConsol').querySelector('thead').innerHTML='<tr>'+cols.map(c=>
+    `<th class="tbl-link" data-col="${c.k}" style="cursor:pointer">${c.t} ${CONSOL_SORT.col===c.k?(CONSOL_SORT.dir>0?'▲':'▼'):'⇅'}${c.h?help(c.h):''}</th>`).join('')+'</tr>';
+
+  // ordenação
+  const {col,dir}=CONSOL_SORT;
+  arr.sort((a,b)=>{
+    let va=a[col],vb=b[col];
+    if(col==='nome'||col==='setor'){return dir*String(va).localeCompare(String(vb));}
+    va=va==null?-1:va; vb=vb==null?-1:vb;
+    return dir*(va-vb);
+  });
+
+  const tb=el('tblConsol').querySelector('tbody');
+  if(!arr.length){tb.innerHTML=`<tr><td colspan="10" class="empty"><div class="ic">🔍</div>Nenhum colaborador neste filtro.</td></tr>`;return;}
+  tb.innerHTML=arr.map(c=>{
+    const adCor=c.aderencia==null?'':c.aderencia>=80?'color:var(--verde);font-weight:700':c.aderencia>=60?'color:var(--amarelo-esc);font-weight:700':'color:var(--vermelho);font-weight:700';
+    const hz=c.tipo==='HORISTA'?' <span class="pill horista">horista</span>':c.tipo==='HOME OFFICE'?' <span class="pill" style="background:#E0EFFF;color:#1A5FC4">🏠 home office</span>':'';
+    const mE=c.medE!=null?`<b class="late">+${c.medE}min</b> <small style="color:#aaa">(${c.nDesE}x)</small>`:'—';
+    const mR=c.medR!=null?`<b class="late">+${c.medR}min</b> <small style="color:#aaa">(${c.nDesR}x)</small>`:'—';
+    const mS=c.medS!=null?`<b class="late">${c.medS}min</b> <small style="color:#aaa">(${c.nDesS}x)</small>`:'—';
+    return `<tr>
+      <td class="tbl-link" onclick="modalColab('${c.nome.replace(/'/g,"\\'")}')"><b>${c.nome}</b>${hz}</td>
+      <td>${c.setor}</td>
+      <td>${c.diasN}</td>
+      <td style="${adCor}">${c.aderencia==null?'—':c.aderencia+'%'}</td>
+      <td style="${c.nNok?'color:var(--vermelho);font-weight:700':''}">${c.nNok}</td>
+      <td style="${c.nEsq?'color:#6B21C7;font-weight:700':''}">${c.nEsq||'—'}</td>
+      <td>${mE}</td><td>${mR}</td><td>${mS}</td>
+      <td style="font-weight:700">${c.perdida?hhmm(c.perdida):'—'}</td>
+      <td style="color:var(--roxo);font-weight:700">${c.gerada?hhmm(c.gerada):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  // handlers de ordenação
+  el('tblConsol').querySelectorAll('th').forEach(th=>th.addEventListener('click',()=>{
+    const col=th.dataset.col;
+    if(CONSOL_SORT.col===col)CONSOL_SORT.dir*=-1; else {CONSOL_SORT.col=col;CONSOL_SORT.dir=col==='nome'||col==='setor'?1:-1;}
+    renderConsol(dados);
+  }));
 }
 
 function renderTablePonto(dados){
@@ -759,14 +1147,16 @@ function renderTablePonto(dados){
   tb.innerHTML=dados.map(r=>{
     const eC=r.dE>TOL?'late':'',sC=r.dS<-TOL?'late':'';
     const rC=(r.isLog&&r.dR>TOL)||(!r.isLog&&r.detalhe.almoco&&r.detalhe.almoco.extra>TOL)?'late':'';
-    let pill=r.situacao==='ok'?'<span class="pill ok">✅ OK</span>':r.situacao==='nok'?`<span class="pill nok">⚠️ ${r.flags.join(' · ')}</span>`:`<span class="pill aus">📋 ${r.obs}</span>`;
-    const hz=r.tipo==='HORISTA'?' <span class="pill horista">horista</span>':'';
+    let pill=r.homeoffice?'<span class="pill" style="background:#E0EFFF;color:#1A5FC4">🏠 Home office</span>':r.situacao==='ok'?'<span class="pill ok">✅ OK</span>':r.situacao==='esq'?'<span class="pill esq">🕳 Irregular · esqueceu de bater</span>':r.situacao==='nok'?`<span class="pill nok">⚠️ ${r.flags.join(' · ')}</span>`:`<span class="pill aus">📋 ${r.obs}</span>`;
+    // no caso de esquecimento, o retorno do almoço mostra vazio (não o valor irreal)
+    const retDisplay=r.situacao==='esq'?'<span style="color:#6B21C7">🕳 —</span>':(r.retInt||'—');
+    const hz=r.tipo==='HORISTA'?' <span class="pill horista">horista</span>':r.tipo==='HOME OFFICE'?' <span class="pill" style="background:#E0EFFF;color:#1A5FC4">🏠 HO</span>':'';
     return `<tr>
       <td><span class="dt-badge">${dfmt(r.data)}</span></td><td>${diaSemana(r.data).slice(0,3)}</td>
       <td>${r.setor}</td><td>${r.sub}</td>
       <td class="tbl-link" onclick="modalColab('${r.nome.replace(/'/g,"\\'")}')"><b>${r.nome}</b>${hz}</td>
       <td class="${eC}">${r.entrada||'—'} <small style="color:#bbb">(${r.refE})</small></td>
-      <td>${r.saidaInt||'—'}</td><td class="${rC}">${r.retInt||'—'}</td>
+      <td>${r.saidaInt||'—'}</td><td class="${rC}">${retDisplay}</td>
       <td class="${sC}">${r.saida||'—'} <small style="color:#bbb">(${r.refS})</small></td>
       <td>${pill}</td></tr>`;
   }).join('');
@@ -849,6 +1239,13 @@ function exportPonto(){
   const ws2=XLSX.utils.aoa_to_sheet([h2,...irr.map(r=>[dfmt(r.data),r.setor,r.sub,r.nome,r.flags.join(' | ')])]);
   ws2['!cols']=[{wch:10},{wch:18},{wch:20},{wch:34},{wch:44}];
   XLSX.utils.book_append_sheet(wb,ws2,'Irregularidades');
+  // aba estratégica por setor
+  const an=analiseSetor(dados);
+  const h3=['SETOR','EQUIPE','ADERÊNCIA %','IRREGULARES','PROBLEMA PRINCIPAL','HORAS PERDIDAS','PERDIDA/PESSOA','GERADAS S/ JUSTIF','MAIOR OFENSOR'];
+  const b3=an.sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa).map(a=>[a.setor,a.headcount,a.aderencia==null?'—':a.aderencia,a.nok,a.problema,hhmm(a.perdida),hhmm(Math.round(a.perdidaPorPessoa)),hhmm(a.gerada),a.topOfensor?a.topOfensor.nome:'—']);
+  const ws3=XLSX.utils.aoa_to_sheet([h3,...b3]);
+  ws3['!cols']=[{wch:20},{wch:10},{wch:12},{wch:12},{wch:18},{wch:16},{wch:16},{wch:18},{wch:34}];
+  XLSX.utils.book_append_sheet(wb,ws3,'Visão Estratégica');
   XLSX.writeFile(wb,'conformidade_ponto_pangeia.xlsx');
 }
 function exportBanco(){
@@ -876,12 +1273,19 @@ function onPonto(file){
   el('pontoBanner').innerHTML='<div class="banner info"><span class="spin"></span> Processando '+file.name+'…</div>';
   lerArquivo(file,rows=>{try{
     PONTO=parsePonto(rows);
-    if(!PONTO.length){el('pontoBanner').innerHTML='<div class="banner err">⚠️ Nenhum registro de ponto encontrado.</div>';return;}
+    const parciais=PONTO.__diasParciais||[];
+    if(!PONTO.length){
+      let m='<div class="banner warn">⚠️ Nenhum dia fechado para analisar.';
+      if(parciais.length)m+=' Os dias no relatório ainda estão em andamento (menos de 70% com saída batida): '+parciais.map(dfmt).join(', ')+'. Gere o relatório após o fim do expediente.';
+      el('pontoBanner').innerHTML=m+'</div>';return;
+    }
     const datas=[...new Set(PONTO.map(r=>r.data))].sort();
     const sem=[...new Set(PONTO.filter(r=>r.setor==='(sem cadastro)').map(r=>r.nome))];
-    let msg=`<div class="banner ok">✅ ${PONTO.length} registros · ${datas.length} dia(s) · ${new Set(PONTO.map(r=>r.nome)).size} colaboradores`;
+    let msg=`<div class="banner ok">✅ ${PONTO.length} registros · ${datas.length} dia(s) fechado(s) · ${new Set(PONTO.map(r=>r.nome)).size} colaboradores`;
     if(sem.length)msg+=` · 🟡 ${sem.length} sem cadastro: ${sem.slice(0,3).join(', ')}${sem.length>3?'…':''}`;
-    el('pontoBanner').innerHTML=msg+'</div>';
+    msg+='</div>';
+    if(parciais.length)msg+=`<div class="banner info">⏳ ${parciais.length} dia(s) em andamento ignorado(s) (menos de 70% com saída registrada): <b>${parciais.map(dfmt).join(', ')}</b>. Não dá para avaliar atraso/falta num dia que ainda não fechou.</div>`;
+    el('pontoBanner').innerHTML=msg;
     el('fData').innerHTML='<option value="">Todas as datas</option>'+datas.map(d=>`<option value="${d}">${dfmt(d)}/${d.slice(0,4)} · ${diaSemana(d).slice(0,3)}</option>`).join('');
     popSelect(el('fSetor'),[...new Set(PONTO.map(r=>r.setor))].sort());
     popSelect(el('fSub'),[...new Set(PONTO.map(r=>r.sub))].sort());
@@ -925,7 +1329,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   el('bLimpar').addEventListener('click',()=>{['bSetor','bSub','bSaldo'].forEach(id=>el(id).value='');el('bNome').value='';popSelect(el('bSub'),[...new Set(BANCO.map(r=>r.sub))].sort());renderBanco();});
   el('btnExportBanco').addEventListener('click',exportBanco);
 });
-window.modalColab=modalColab;window.fecharModal=fecharModal;
+window.modalColab=modalColab;window.fecharModal=fecharModal;window.modalSetor=modalSetor;window.irPara=irPara;window.voltarModal=voltarModal;
 
 </script>
 </body>
