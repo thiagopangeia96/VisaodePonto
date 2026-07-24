@@ -113,8 +113,8 @@ header::after{content:"";position:absolute;right:-30px;top:-60px;width:260px;hei
 .help:hover{background:var(--roxo);color:#fff}
 .help .tip{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
   background:var(--tinta);color:#fff;padding:11px 14px;border-radius:10px;font-size:.78rem;font-weight:400;
-  line-height:1.5;width:280px;z-index:50;box-shadow:var(--sombra-lg);text-align:left;transition:.15s;pointer-events:none;
-  text-transform:none;letter-spacing:normal}
+  line-height:1.5;width:260px;z-index:60;box-shadow:var(--sombra-lg);text-align:left;transition:.15s;pointer-events:none;
+  text-transform:none;letter-spacing:normal;white-space:normal}
 .help .tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--tinta)}
 .help:hover .tip{visibility:visible;opacity:1}
 .help .tip b{color:var(--amarelo);font-weight:700}
@@ -123,6 +123,9 @@ header::after{content:"";position:absolute;right:-30px;top:-60px;width:260px;hei
 .help.tip-left .tip::after{left:14px}
 .help.tip-right .tip{left:auto;right:0;transform:none}
 .help.tip-right .tip::after{left:auto;right:14px}
+/* dentro de cabeçalho de tabela: balão ABAIXO do ícone (não há espaço acima do header fixo) */
+th .help .tip{bottom:auto;top:calc(100% + 8px);z-index:70}
+th .help .tip::after{top:auto;bottom:100%;border-top-color:transparent;border-bottom-color:var(--tinta)}
 /* faixa de legenda geral no topo dos resultados */
 .legenda{background:#fff;border-radius:14px;padding:14px 18px;box-shadow:var(--sombra);margin:16px 0;
   display:flex;flex-wrap:wrap;gap:18px;font-size:.8rem;color:var(--cinza)}
@@ -289,15 +292,15 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
     <div class="kpis" id="kpisImpacto"></div>
 
     <div class="grid2">
-      <div class="card"><h3>📊 Aderência ao ponto por setor <span class="help">ⓘ<span class="tip">% de registros conformes sobre presenças (conformes + irregulares). Não conta ausências. 🟢≥80% · 🟡60-79% · 🔴<60%.</span></span></h3>
+      <div class="card"><h3>📊 Aderência ao ponto por setor <span class="help" onclick="glossPopup('aderencia')" style="cursor:pointer" title="Ver definição">ⓘ</span></h3>
         <p class="hint">% de registros pontuais sobre presenças — proporcional, não bruto.</p>
         <div class="chart-box"><canvas id="chSetor"></canvas></div></div>
-      <div class="card"><h3>⏳ Impacto em horas por setor <span class="help">ⓘ<span class="tip">Passivo de produtividade: minutos que deveriam estar em serviço e não estavam (atraso entrada + almoço além do limite + saída antecipada). Já desconta 10min de tolerância. Não inclui esquecimento de batida.</span></span></h3>
+      <div class="card"><h3>⏳ Impacto em horas por setor <span class="help" onclick="glossPopup('horaPerdida')" style="cursor:pointer" title="Ver definição">ⓘ</span></h3>
         <p class="hint">Horas perdidas (produtividade) vs. geradas sem justificativa (passivo).</p>
         <div class="chart-box"><canvas id="chImpacto"></canvas></div></div>
     </div>
     <div class="grid2">
-      <div class="card"><h3>🕐 Tipo de ocorrência <span class="help">ⓘ<span class="tip">Distribuição das irregularidades de horário entre atraso de entrada, almoço acima do limite e saída antecipada.</span></span></h3>
+      <div class="card"><h3>🕐 Tipo de ocorrência <span class="help" onclick="glossPopup('tipoOcorr')" style="cursor:pointer" title="Ver definição">ⓘ</span></h3>
         <p class="hint">Onde se concentram as irregularidades.</p>
         <div class="chart-box"><canvas id="chTipo"></canvas></div></div>
       <div class="card"><h3>🏆 Ranking de pontualidade por setor</h3>
@@ -305,10 +308,10 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
         <div class="chart-box"><canvas id="chRank"></canvas></div></div>
     </div>
     <div class="grid2">
-      <div class="card"><h3>📈 Tendência diária de conformidade <span class="help">ⓘ<span class="tip">Evolução da conformidade ao longo dos dias fechados. Piora/melhora só com dados suficientes; ocorrência isolada no fim é tratada como evento recente, não tendência.</span></span></h3>
+      <div class="card"><h3>📈 Tendência diária de conformidade <span class="help" onclick="glossPopup('tendencia')" style="cursor:pointer" title="Ver definição">ⓘ</span></h3>
         <p class="hint">Evolução da taxa de conformidade ao longo dos dias.</p>
         <div class="chart-box"><canvas id="chTend"></canvas></div></div>
-      <div class="card"><h3>🚨 Top ofensores — horas perdidas <span class="help tip-right">ⓘ<span class="tip">Passivo de produtividade: minutos que deveriam estar em serviço e não estavam (atraso entrada + almoço além do limite + saída antecipada). Já desconta 10min de tolerância. Não inclui esquecimento de batida.</span></span></h3>
+      <div class="card"><h3>🚨 Top ofensores — horas perdidas <span class="help" onclick="glossPopup('horaPerdida')" style="cursor:pointer" title="Ver definição">ⓘ</span></h3>
         <p class="hint">Colaboradores que mais impactam a produtividade.</p>
         <div class="chart-box"><canvas id="chOfensores"></canvas></div></div>
     </div>
@@ -406,12 +409,27 @@ const GLOSSARIO={
   diaCheio:`Só entram na análise os dias <b>fechados</b>: aqueles em que ≥70% dos presentes já bateram a saída. Um relatório tirado durante o expediente tem o dia atual descartado — não dá para avaliar atraso/falta num dia que ainda não terminou.`,
   esqueceu:`O colaborador saiu para o almoço mas não registrou a volta; o próximo ponto é o do fim do dia. O almoço aparece irreal (>2h). É cobrado como irregularidade de registro, mas não penaliza horas perdidas.`,
   homeoffice:`Colaborador remoto — não está sujeito à métrica de ponto presencial. As batidas são informativas e não geram irregularidade nem hora perdida.`,
-  horista:`Remunerado por hora trabalhada. Não entra na escala de folgas para abatimento de banco de horas; eventual saldo é compensado via pagamento.`
+  horista:`Remunerado por hora trabalhada. Não entra na escala de folgas para abatimento de banco de horas; eventual saldo é compensado via pagamento.`,
+  tipoOcorr:`Distribuição das irregularidades de horário entre <b>atraso de entrada</b>, <b>almoço acima do limite</b> e <b>saída antecipada</b>. Não inclui esquecimento de batida (que é irregularidade de registro).`,
+  perdidaPessoaChart:`Horas perdidas do setor divididas pelo nº de pessoas — permite comparar setores de tamanhos diferentes.`
 };
 function help(chave,pos){
-  const t=GLOSSARIO[chave]||'';
-  const cls=pos==='left'?' tip-left':pos==='right'?' tip-right':'';
-  return `<span class="help${cls}">ⓘ<span class="tip">${t}</span></span>`;
+  // Todos os tooltips agora abrem num popup flutuante ao clicar — nunca cortam,
+  // independente de onde o ícone esteja (topo de card, dentro de tabela, etc.).
+  return `<span class="help" onclick="event.stopPropagation();glossPopup('${chave}')" style="cursor:pointer" title="Ver definição">ⓘ</span>`;
+}
+// versão para cabeçalhos de tabela: abre a definição num popup flutuante (não corta com overflow)
+const GLOSS_TITULO={tolerancia:'Tolerância de ±10min',conforme:'Conforme',irregHorario:'Irregularidade de horário',
+  irregRegistro:'Irregularidade de registro',ausente:'Ausente',atrasoEntrada:'Atraso na entrada',almocoExtra:'Almoço acima do limite',
+  saidaAntec:'Saída antecipada',horaPerdida:'Horas perdidas',horaGerada:'Horas geradas sem justificativa',aderencia:'Aderência ao ponto',
+  perdidaPessoa:'Perdida por colaborador',reincidente:'Colaborador reincidente',tendencia:'Tendência',diaCheio:'Dia fechado',
+  esqueceu:'Esqueceu de bater ponto',homeoffice:'Home office',horista:'Horista',tipoOcorr:'Tipo de ocorrência'};
+function helpTh(chave){
+  return `<span class="help" onclick="event.stopPropagation();glossPopup('${chave}')" style="cursor:pointer">ⓘ</span>`;
+}
+function glossPopup(chave){
+  const titulo=GLOSS_TITULO[chave]||'Definição';
+  abrirModal('ℹ️ '+titulo,'', `<div style="font-size:.92rem;line-height:1.6">${GLOSSARIO[chave]||''}</div>`);
 }
 const dfmt=d=>d.slice(8,10)+'/'+d.slice(5,7);
 const primeiroNome=n=>{const p=(n||'').split(/\s+/);return p[0]+(p[1]?' '+p[1]:'');};
@@ -801,6 +819,13 @@ function pontoFiltrado(){
   const d=el('fData').value,se=el('fSetor').value,su=el('fSub').value,st=el('fStatus').value,nm=norm(el('fNome').value);
   return PONTO.filter(r=>(!d||r.data===d)&&(!se||r.setor===se)&&(!su||r.sub===su)&&(!st||r.situacao===st)&&(!nm||norm(r.nome).includes(nm)));
 }
+// Base para análise ESTRATÉGICA por setor: sempre o TODO.
+// Ignora os filtros de situação e nome (que distorceriam a leitura do setor),
+// mas respeita data/setor/subárea para permitir recortes legítimos de período/área.
+function pontoEstrategico(){
+  const d=el('fData').value,se=el('fSetor').value,su=el('fSub').value;
+  return PONTO.filter(r=>(!d||r.data===d)&&(!se||r.setor===se)&&(!su||r.sub===su));
+}
 
 function renderPonto(){
   const dados=pontoFiltrado();
@@ -831,7 +856,7 @@ function renderPonto(){
     <div class="it">📅 <b>Só dias fechados</b> ${help('diaCheio','right')}</div>`;
 
   renderResumoColab(dados);
-  renderInsightsPonto(dados);
+  renderInsightsPonto();
   renderWatchPonto();
   renderChartsPonto(dados);
   renderConsol(dados);
@@ -859,10 +884,11 @@ function renderResumoColab(dados){
     </div></div>`;
 }
 
-function renderInsightsPonto(dados){
+function renderInsightsPonto(){
+  const dados=pontoEstrategico(); // insights refletem o TODO, não o filtro de situação
   const box=el('insightsPonto');const ins=[];
   const nok=dados.filter(r=>r.situacao==='nok');
-  const cnt={}; PONTO.filter(r=>r.situacao==='nok').forEach(r=>{cnt[r.nome]=(cnt[r.nome]||0)+1;});
+  const cnt={}; dados.filter(r=>r.situacao==='nok'||r.situacao==='esq').forEach(r=>{cnt[r.nome]=(cnt[r.nome]||0)+1;});
   const reinc=Object.entries(cnt).filter(([,v])=>v>=2).sort((a,b)=>b[1]-a[1]);
   if(reinc.length)ins.push({c:'crit',ic:'🔁',key:'reinc',t:`<b>${reinc.length} colaborador(es) reincidente(s)</b> com 2+ irregularidades. Destaque: <b>${reinc[0][0]}</b> (${reinc[0][1]}x).<div class="meta">Clique para ver a lista e priorizar as conversas.</div>`});
   let cE=0,cR=0,cS=0; nok.forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada')))cE++;if(r.flags.some(f=>/almo[çc]o/i.test(f)))cR++;if(r.flags.some(f=>f.startsWith('Saída')))cS++;});
@@ -977,7 +1003,7 @@ function analiseSetor(dados){
 
 function renderEstrategico(dados){
   const an=analiseSetor(dados).sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa);
-  const cols=['Setor','Equipe','Aderência '+help('aderencia'),'Irregul.','Problema principal','Horas perdidas '+help('horaPerdida'),'Perdida/pessoa '+help('perdidaPessoa'),'Geradas s/ justif. '+help('horaGerada'),'Maior ofensor'];
+  const cols=['Setor','Equipe','Aderência '+helpTh('aderencia'),'Irregul.','Problema principal','Horas perdidas '+helpTh('horaPerdida'),'Perdida/pessoa '+helpTh('perdidaPessoa'),'Geradas s/ justif. '+helpTh('horaGerada'),'Maior ofensor'];
   el('tblEstrategico').querySelector('thead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
   const tb=el('tblEstrategico').querySelector('tbody');
   if(!an.length){tb.innerHTML=`<tr><td colspan="9" class="empty"><div class="ic">🔍</div>Sem dados.</td></tr>`;return;}
@@ -1011,8 +1037,8 @@ function renderEstrategico(dados){
 }
 
 function modalSetor(setor){
-  const dados=pontoFiltrado().filter(r=>r.setor===setor);
-  const a=analiseSetor(pontoFiltrado()).find(x=>x.setor===setor);
+  const dados=pontoEstrategico().filter(r=>r.setor===setor);
+  const a=analiseSetor(pontoEstrategico()).find(x=>x.setor===setor);
   if(!a){return;}
   // ranking de ofensores do setor
   const ofc={};dados.filter(r=>r.horasPerdidas>0).forEach(r=>{if(!ofc[r.nome])ofc[r.nome]={min:0,n:0};ofc[r.nome].min+=r.horasPerdidas;ofc[r.nome].n++;});
@@ -1042,8 +1068,11 @@ function modalSetor(setor){
 
 /* ---------- CHARTS ---------- */
 function renderChartsPonto(dados){
-  renderEstrategico(dados);
-  const an=analiseSetor(dados);
+  // A visão estratégica e os gráficos agregados usam SEMPRE o todo (ignoram
+  // filtros de situação/nome), senão induzem a erro de leitura por setor.
+  const base=pontoEstrategico();
+  renderEstrategico(base);
+  const an=analiseSetor(base);
   const setores=an.map(a=>a.setor);
 
   // Aderência proporcional (%) por setor — barra colorida por semáforo
@@ -1058,9 +1087,9 @@ function renderChartsPonto(dados){
     {label:'Geradas s/ justif. (passivo)',data:an.map(a=>+(a.gerada/60).toFixed(2)),backgroundColor:'#F5C542'}]},
     {plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+hhmm(Math.round(c.raw*60))}}},scales:{y:{ticks:{callback:v=>v+'h'}}}});
 
-  // Tipo de ocorrência
+  // Tipo de ocorrência (sobre o todo)
   let cE=0,cR=0,cS=0;
-  dados.filter(r=>r.situacao==='nok').forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada')))cE++;if(r.flags.some(f=>/almo[çc]o/i.test(f)))cR++;if(r.flags.some(f=>f.startsWith('Saída')))cS++;});
+  base.filter(r=>r.situacao==='nok').forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada')))cE++;if(r.flags.some(f=>/almo[çc]o/i.test(f)))cR++;if(r.flags.some(f=>f.startsWith('Saída')))cS++;});
   const totT=cE+cR+cS||1;
   mkChart('chTipo','doughnut',{labels:[`Atraso entrada (${cE})`,`Almoço acima (${cR})`,`Saída antecipada (${cS})`],
     datasets:[{data:[cE,cR,cS],backgroundColor:['#6B21C7','#B794E6','#F5C542'],borderWidth:2,borderColor:'#fff'}]},
@@ -1072,15 +1101,15 @@ function renderChartsPonto(dados){
     backgroundColor:rank.map(a=>a.aderencia>=80?'#1E9E5A':a.aderencia>=60?'#F5C542':'#D63A4A')}]},
     {indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'% ('+(rank[c.dataIndex].ok+rank[c.dataIndex].nok)+' registros)'}}},scales:{x:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
 
-  // Tendência diária
-  const dias=[...new Set(dados.map(r=>r.data))].sort();
-  const taxaDia=dias.map(d=>{const rr=dados.filter(r=>r.data===d&&r.situacao!=='aus');const ok=rr.filter(r=>r.situacao==='ok').length;return rr.length?Math.round(ok/rr.length*100):null;});
+  // Tendência diária (sobre o todo)
+  const dias=[...new Set(base.map(r=>r.data))].sort();
+  const taxaDia=dias.map(d=>{const rr=base.filter(r=>r.data===d&&r.situacao!=='aus');const ok=rr.filter(r=>r.situacao==='ok').length;return rr.length?Math.round(ok/rr.length*100):null;});
   mkChart('chTend','line',{labels:dias.map(dfmt),datasets:[{label:'% Conformidade',data:taxaDia,borderColor:'#6B21C7',
     backgroundColor:'rgba(107,33,199,.12)',fill:true,tension:.3,pointRadius:5,pointBackgroundColor:'#6B21C7',spanGaps:true}]},
     {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.raw+'% conformidade'}}},scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}}});
 
-  // Top ofensores (horas perdidas por colaborador)
-  const ofc={};dados.filter(r=>r.horasPerdidas>0).forEach(r=>{ofc[r.nome]=(ofc[r.nome]||0)+r.horasPerdidas;});
+  // Top ofensores (horas perdidas por colaborador, sobre o todo)
+  const ofc={};base.filter(r=>r.horasPerdidas>0).forEach(r=>{ofc[r.nome]=(ofc[r.nome]||0)+r.horasPerdidas;});
   const ofTop=Object.entries(ofc).sort((a,b)=>b[1]-a[1]).slice(0,10);
   mkChart('chOfensores','bar',{labels:ofTop.map(o=>primeiroNome(o[0])),datasets:[{label:'Min perdidos',data:ofTop.map(o=>o[1]),backgroundColor:'#D63A4A'}]},
     {indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>hhmm(ofTop[c.dataIndex][1])+' perdidas'}}},scales:{x:{ticks:{callback:v=>hhmm(v)}}}});
@@ -1126,7 +1155,7 @@ function renderConsol(dados){
     {k:'perdida',t:'H. perdidas',h:'horaPerdida'},
     {k:'gerada',t:'H. s/ justif.',h:'horaGerada'}];
   el('tblConsol').querySelector('thead').innerHTML='<tr>'+cols.map(c=>
-    `<th class="tbl-link" data-col="${c.k}" style="cursor:pointer">${c.t} ${CONSOL_SORT.col===c.k?(CONSOL_SORT.dir>0?'▲':'▼'):'⇅'}${c.h?help(c.h):''}</th>`).join('')+'</tr>';
+    `<th class="tbl-link" data-col="${c.k}" style="cursor:pointer">${c.t} ${CONSOL_SORT.col===c.k?(CONSOL_SORT.dir>0?'▲':'▼'):'⇅'}${c.h?helpTh(c.h):''}</th>`).join('')+'</tr>';
 
   // ordenação
   const {col,dir}=CONSOL_SORT;
@@ -1356,7 +1385,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   el('bLimpar').addEventListener('click',()=>{['bSetor','bSub','bSaldo'].forEach(id=>el(id).value='');el('bNome').value='';popSelect(el('bSub'),[...new Set(BANCO.map(r=>r.sub))].sort());renderBanco();});
   el('btnExportBanco').addEventListener('click',exportBanco);
 });
-window.modalColab=modalColab;window.fecharModal=fecharModal;window.modalSetor=modalSetor;window.irPara=irPara;window.voltarModal=voltarModal;
+window.modalColab=modalColab;window.fecharModal=fecharModal;window.modalSetor=modalSetor;window.irPara=irPara;window.voltarModal=voltarModal;window.glossPopup=glossPopup;
 
 </script>
 </body>
