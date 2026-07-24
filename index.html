@@ -374,7 +374,7 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
 </div>
 
 <div id="modalRoot"></div>
-<footer>🐻 Pangeia 96 · Painel operacional · Base sincronizada via Google Sheets</footer>
+<footer>🐻 Pangeia 96 · Painel operacional · Base sincronizada via Google Sheets · <span id="buildTag" style="opacity:.7"></span></footer>
 
 <script>
 const BASE_CSV_URL = "https://docs.google.com/spreadsheets/d/1-EO4BLWEBxxvxFooZdqRU7Zn6ckdOutPZxXjmulyWUc/export?format=csv&gid=0";
@@ -1524,6 +1524,7 @@ function onBanco(file){
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{
+  const bt=el('buildTag'); if(bt) bt.textContent='build 2026-07-24 16:37';
   await carregarBase();
   setupDrop('dzPonto','filePonto',onPonto);
   setupDrop('dzBanco','fileBanco',onBanco);
