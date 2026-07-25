@@ -251,14 +251,25 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
 
 <!-- ABA PONTO -->
 <section id="tab-ponto">
-  <div class="dropzone" id="dzPonto">
-    <div class="ic">📥</div>
-    <h3>Solte aqui o relatório de Folha de Ponto (Solides)</h3>
-    <p>Arquivo <b>.xls</b> · ou clique para escolher</p>
-    <button class="btn amarelo">Escolher arquivo</button>
-    <input type="file" id="filePonto" accept=".xls,.xlsx" class="hide">
+  <div class="grid2">
+    <div class="dropzone" id="dzPonto" style="margin:26px 0">
+      <div class="ic">📥</div>
+      <h3>Folha de Ponto (Solides)</h3>
+      <p>Arquivo <b>.xls</b> · ou clique para escolher</p>
+      <button class="btn amarelo">Escolher arquivo</button>
+      <input type="file" id="filePonto" accept=".xls,.xlsx" class="hide">
+    </div>
+    <div class="dropzone" id="dzBancoTop" style="margin:26px 0">
+      <div class="ic">🏦</div>
+      <h3>Banco de Horas (Solides)</h3>
+      <p>Arquivo <b>.xls</b> "RelatorioBancoHoras" · ou clique</p>
+      <button class="btn amarelo">Escolher arquivo</button>
+      <input type="file" id="fileBancoTop" accept=".xls,.xlsx" class="hide">
+    </div>
   </div>
   <div id="pontoBanner"></div>
+  <div id="bancoBannerTop"></div>
+
 
   <div id="pontoContent" class="hide">
     <div class="filtros">
@@ -407,7 +418,7 @@ const GLOSSARIO={
   almocoExtra:`Tempo de almoço que ultrapassou o limite. Para a <b>Logística</b>, o horário é fixo (retorno 13:00). Para as <b>demais áreas</b>, conta a duração (até 1h). Sempre descontando 10min de tolerância.`,
   saidaAntec:`Quando o colaborador sai antes do horário previsto, além dos 10min de tolerância. Ex.: ref 18:00, saiu 17:40 → 20min antes.`,
   horaPerdida:`<b>Passivo de produtividade:</b> soma dos minutos que deveriam estar em serviço e não estavam — atraso na entrada + almoço além do limite + saída antecipada. Já descontada a tolerância. <b>Não inclui</b> esquecimento de batida.`,
-  horaGerada:`<b>Passivo financeiro:</b> tempo trabalhado <b>sem justificativa/autorização</b> que vira hora extra — entrada adiantada, retorno de almoço adiantado ou saída após o horário. Gera custo de HE não autorizada.`,
+  horaGerada:`<b>Estimativa feita a partir do PONTO — não é o banco de horas oficial.</b> É tempo detectado pelas batidas (entrada adiantada, retorno de almoço adiantado ou saída após o horário) que sugere hora extra sem autorização. Se você também subiu o relatório de banco de horas, o saldo oficial dele aparece separado, ao lado desta estimativa, para comparação — os dois números podem não bater, porque o banco de horas oficial pode ter ajustes, aprovações e correções que o ponto sozinho não sabe.`,
   aderencia:`% de registros <b>conformes</b> sobre o total de presenças (conformes + irregulares). Não conta ausências. Padrão de mercado: 🟢 ≥80% saudável · 🟡 60-79% atenção · 🔴 <60% crítico.`,
   perdidaPessoa:`Horas perdidas do setor <b>divididas pelo nº de pessoas</b> da equipe. É o número que permite comparar setores de tamanhos diferentes de forma justa — um setor de 2 pessoas e outro de 40 não podem ser comparados pelo total bruto.`,
   reincidente:`Colaborador com <b>2 ou mais irregularidades</b> no período analisado. Quanto mais ocorrências, maior a prioridade de acompanhamento e a escala de ação (conversa → feedback → advertência).`,
@@ -417,6 +428,7 @@ const GLOSSARIO={
   homeoffice:`Colaborador remoto — não está sujeito à métrica de ponto presencial. As batidas são informativas e não geram irregularidade nem hora perdida.`,
   horista:`Remunerado por hora trabalhada. Não entra na escala de folgas para abatimento de banco de horas; eventual saldo é compensado via pagamento.`,
   tipoOcorr:`Distribuição das irregularidades de horário entre <b>atraso de entrada</b>, <b>almoço acima do limite</b> e <b>saída antecipada</b>. Não inclui esquecimento de batida (que é irregularidade de registro).`,
+  irregCombo:`Total combinado de irregularidades do setor: <b>de horário</b> (atraso/saída/almoço) <b>+ de registro</b> (esqueceu de bater ponto). As duas contam contra a aderência do setor.`,
   perdidaPessoaChart:`Horas perdidas do setor divididas pelo nº de pessoas — permite comparar setores de tamanhos diferentes.`
 };
 function help(chave,pos){
@@ -427,7 +439,7 @@ function help(chave,pos){
 // versão para cabeçalhos de tabela: abre a definição num popup flutuante (não corta com overflow)
 const GLOSS_TITULO={tolerancia:'Tolerância de ±10min',conforme:'Conforme',irregHorario:'Irregularidade de horário',
   irregRegistro:'Irregularidade de registro',ausente:'Ausente',atrasoEntrada:'Atraso na entrada',almocoExtra:'Almoço acima do limite',
-  saidaAntec:'Saída antecipada',horaPerdida:'Horas perdidas',horaGerada:'Horas geradas sem justificativa',aderencia:'Aderência ao ponto',
+  saidaAntec:'Saída antecipada',horaPerdida:'Horas perdidas',horaGerada:'HE não autorizada — estimativa via ponto',aderencia:'Aderência ao ponto',
   perdidaPessoa:'Perdida por colaborador',reincidente:'Colaborador reincidente',tendencia:'Tendência',diaCheio:'Dia fechado',
   esqueceu:'Esqueceu de bater ponto',homeoffice:'Home office',horista:'Horista',tipoOcorr:'Tipo de ocorrência'};
 function helpTh(chave){
@@ -771,8 +783,9 @@ function modalColab(nome){
   const maxIrr=Math.max(1,...tiposIrr.map(t=>t.n));
   let breakdownVisual='';
   if(tiposIrr.length){
+    const somaTipos=tiposIrr.reduce((s,t)=>s+t.n,0);
     breakdownVisual=`<h4>🔬 Irregularidades por tipo</h4>
-      <p style="font-size:.82rem;color:var(--cinza);margin-bottom:10px">Das ${p.totNok} irregularidades de ${primeiroNome(nome)}, veja a natureza de cada uma:</p>
+      <p style="font-size:.82rem;color:var(--cinza);margin-bottom:10px">Das ${p.totNok} irregularidades de ${primeiroNome(nome)}, veja a natureza de cada uma${somaTipos>p.totNok?' <span style="color:var(--laranja)">(a soma abaixo passa do total porque um mesmo dia pode ter mais de um problema ao mesmo tempo — ex.: chegou atrasado E também estourou o almoço no mesmo dia)</span>':''}:</p>
       <div style="display:flex;flex-direction:column;gap:9px">
       ${tiposIrr.map(t=>`
         <div style="display:flex;align-items:center;gap:12px">
@@ -1053,7 +1066,7 @@ function analiseSetor(dados){
 
 function renderEstrategico(dados){
   const an=analiseSetor(dados).sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa);
-  const cols=['Setor','Equipe','Aderência '+helpTh('aderencia'),'Irregul.','Problema principal','Horas perdidas '+helpTh('horaPerdida'),'Perdida/pessoa '+helpTh('perdidaPessoa'),'Geradas s/ justif. '+helpTh('horaGerada'),'Maior ofensor'];
+  const cols=['Setor','Equipe','Aderência '+helpTh('aderencia'),'Irregul. '+helpTh('irregCombo'),'Problema principal','Horas perdidas '+helpTh('horaPerdida'),'Perdida/pessoa '+helpTh('perdidaPessoa'),'HE não autoriz. (ponto) '+helpTh('horaGerada'),'Maior ofensor'];
   el('tblEstrategico').querySelector('thead').innerHTML='<tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr>';
   const tb=el('tblEstrategico').querySelector('tbody');
   if(!an.length){tb.innerHTML=`<tr><td colspan="9" class="empty"><div class="ic">🔍</div>Sem dados.</td></tr>`;return;}
@@ -1097,7 +1110,7 @@ function renderEstrategico(dados){
   el('kpisImpacto').innerHTML=`
     <div class="kpi" style="cursor:default"><div class="n">${aderGeral}%</div><div class="l">Aderência geral ${help('aderencia')}</div><div class="sub">${totOk} de ${totOk+totNok} pontuais</div></div>
     <div class="kpi verm" style="cursor:default"><div class="n">${hhmm(totP)}</div><div class="l">⏳ Horas perdidas ${help('horaPerdida')}</div><div class="sub">${totHead?hhmm(Math.round(totP/totHead)):'—'} por colaborador</div></div>
-    <div class="kpi amarelo" style="cursor:default"><div class="n">${hhmm(totG)}</div><div class="l">💰 Geradas s/ justif. ${help('horaGerada')}</div><div class="sub">passivo de HE não autorizada</div></div>
+    <div class="kpi amarelo" style="cursor:default"><div class="n">${hhmm(totG)}</div><div class="l">💰 HE não autoriz. (ponto) ${help('horaGerada')}</div><div class="sub">passivo de HE não autorizada</div></div>
     <div class="kpi laranja" style="cursor:default"><div class="n">${an.filter(a=>a.aderencia!=null&&a.aderencia<60).length}</div><div class="l">🔴 Setores críticos ${help('aderencia','right')}</div><div class="sub">aderência abaixo de 60%</div></div>`;
 }
 
@@ -1132,7 +1145,7 @@ function modalSetor(setor,filtroTipo){
       <div class="b"><div class="v">${a.headcount}</div><div class="k">Equipe</div></div>
       <div class="b ${a.aderencia>=80?'verde':a.aderencia>=60?'laranja':'verm'}"><div class="v">${a.aderencia==null?'—':a.aderencia+'%'}</div><div class="k">Aderência</div></div>
       <div class="b verm" style="cursor:pointer;${cardOn('perdida')}" onclick="irPara(()=>modalSetor('${setor}','${ft==='perdida'?'':'perdida'}'))"><div class="v">${hhmm(a.perdida)}</div><div class="k">⏳ H. perdidas ${help('horaPerdida')}</div></div>
-      <div class="b laranja" style="cursor:pointer;${cardOn('gerada')}" onclick="irPara(()=>modalSetor('${setor}','${ft==='gerada'?'':'gerada'}'))"><div class="v">${hhmm(a.gerada)}</div><div class="k">💰 H. s/ justif. ${help('horaGerada')}</div></div>
+      <div class="b laranja" style="cursor:pointer;${cardOn('gerada')}" onclick="irPara(()=>modalSetor('${setor}','${ft==='gerada'?'':'gerada'}'))"><div class="v">${hhmm(a.gerada)}</div><div class="k">💰 HE não autoriz. (ponto) ${help('horaGerada')}</div></div>
     </div>
     <p style="font-size:.76rem;color:var(--cinza);margin-top:-6px">💡 Clique nos cards de horas acima para filtrar a tabela abaixo por tipo.</p>
     <h4>🩺 Veredito</h4>${veredito}
@@ -1141,7 +1154,7 @@ function modalSetor(setor,filtroTipo){
     <table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Tipo</th><th>Ocorr.</th><th>Quantidade</th></tr></thead><tbody>
     ${linhasFiltradas.length?linhasFiltradas.map(l=>{
       const cor=l.tipo==='perdida'?'var(--vermelho)':'var(--roxo)';
-      const label=l.tipo==='perdida'?'⏳ Perdida':'💰 Gerada s/ justif.';
+      const label=l.tipo==='perdida'?'⏳ Perdida':'💰 HE não autoriz. (ponto)';
       return `<tr><td class="tbl-link" onclick="irPara(()=>modalColab('${l.nome.replace(/'/g,"\\'")}'))"><b>${l.nome}</b></td>
         <td style="color:${cor};font-weight:700">${label}</td><td>${l.n}</td>
         <td style="color:${cor};font-weight:700">${hhmm(l.min)}</td></tr>`;
@@ -1168,7 +1181,7 @@ function renderChartsPonto(dados){
   // Impacto em horas — perdida vs gerada
   mkChart('chImpacto','bar',{labels:setores,datasets:[
     {label:'Perdidas (produtividade)',data:an.map(a=>+(a.perdida/60).toFixed(2)),backgroundColor:'#D63A4A'},
-    {label:'Geradas s/ justif. (passivo)',data:an.map(a=>+(a.gerada/60).toFixed(2)),backgroundColor:'#F5C542'}]},
+    {label:'HE não autoriz. no ponto (passivo)',data:an.map(a=>+(a.gerada/60).toFixed(2)),backgroundColor:'#F5C542'}]},
     {plugins:{tooltip:{callbacks:{label:c=>c.dataset.label+': '+hhmm(Math.round(c.raw*60))}}},scales:{y:{ticks:{callback:v=>v+'h'}}}});
 
   // Tipo de ocorrência (sobre o todo) — clicável: mostra quem puxa cada tipo
@@ -1239,7 +1252,7 @@ function renderConsol(dados){
     {k:'medR',t:'Méd. almoço extra',h:'almocoExtra'},
     {k:'medS',t:'Méd. saída antec.',h:'saidaAntec'},
     {k:'perdida',t:'H. perdidas',h:'horaPerdida'},
-    {k:'gerada',t:'H. s/ justif.',h:'horaGerada'}];
+    {k:'gerada',t:'HE não autoriz. (ponto)',h:'horaGerada'}];
   el('tblConsol').querySelector('thead').innerHTML='<tr>'+cols.map(c=>
     `<th class="tbl-link" data-col="${c.k}" style="cursor:pointer">${c.t} ${CONSOL_SORT.col===c.k?(CONSOL_SORT.dir>0?'▲':'▼'):'⇅'}${c.h?helpTh(c.h):''}</th>`).join('')+'</tr>';
 
@@ -1337,34 +1350,159 @@ function bancoFiltrado(){
 function renderBanco(){
   const dados=bancoFiltrado();const pos=dados.filter(r=>r.mins>0),neg=dados.filter(r=>r.mins<0);
   const sP=pos.reduce((a,r)=>a+r.mins,0),sN=neg.reduce((a,r)=>a+r.mins,0);
+  const stf=el('bSaldo').value;
   el('kpisBanco').innerHTML=`
-    <button class="kpi" data-k=""><div class="n">${dados.length}</div><div class="l">Colaboradores</div></button>
-    <button class="kpi verde" data-k="pos"><div class="n">${pos.length}</div><div class="l">⬆ Saldo positivo</div><div class="sub">total ${hhmm(sP)}</div></button>
-    <button class="kpi verm" data-k="neg"><div class="n">${neg.length}</div><div class="l">⬇ Saldo negativo</div><div class="sub">total ${hhmm(sN)}</div></button>
-    <button class="kpi amarelo" data-k=""><div class="n">${hhmm(sP+sN)}</div><div class="l">Saldo líquido</div></button>`;
+    <button class="kpi ${stf===''?'on':''}" data-k=""><div class="n">${dados.length}</div><div class="l">Colaboradores</div><div class="clickhint">clique: ver todos</div></button>
+    <button class="kpi verde ${stf==='pos'?'on':''}" data-k="pos"><div class="n">${pos.length}</div><div class="l">⬆ Saldo positivo</div><div class="sub">total ${hhmm(sP)}</div><div class="clickhint">clique: filtrar</div></button>
+    <button class="kpi verm ${stf==='neg'?'on':''}" data-k="neg"><div class="n">${neg.length}</div><div class="l">⬇ Saldo negativo</div><div class="sub">total ${hhmm(sN)}</div><div class="clickhint">clique: filtrar</div></button>
+    <button class="kpi amarelo" data-k="" style="cursor:default"><div class="n">${hhmm(sP+sN)}</div><div class="l">Saldo líquido</div></button>`;
   document.querySelectorAll('#kpisBanco .kpi').forEach(k=>k.addEventListener('click',()=>{el('bSaldo').value=k.dataset.k;renderBanco();}));
   renderInsightsBanco(dados);renderChartsBanco(dados);renderTableBanco(dados);
 }
+function analiseSetorBanco(dados){
+  const setores=[...new Set(dados.map(r=>r.setor))].filter(s=>s!=='(sem cadastro)').sort();
+  return setores.map(s=>{
+    const rr=dados.filter(r=>r.setor===s);
+    const pos=rr.filter(r=>r.mins>0), neg=rr.filter(r=>r.mins<0);
+    const headcount=headcountSetor(s)||rr.length;
+    const liquido=rr.reduce((a,r)=>a+r.mins,0);
+    return {setor:s,headcount,n:rr.length,pos:pos.reduce((a,r)=>a+r.mins,0),neg:neg.reduce((a,r)=>a+r.mins,0),liquido,liquidoPorPessoa:headcount?liquido/headcount:0};
+  });
+}
 function renderInsightsBanco(dados){
   const ins=[];const pos=dados.filter(r=>r.mins>0),neg=dados.filter(r=>r.mins<0);
-  if(pos.length){const t=pos[0];ins.push({c:'good',ic:'🏆',t:`Maior saldo positivo: <b>${t.nome}</b> (${t.saldo}) — ${t.setor}/${t.sub}.<div class="meta">Candidato a folga${t.tipo==='HORISTA'?' — HORISTA: compensar via pagamento':''}.</div>`});}
-  if(neg.length){const b=neg[neg.length-1];ins.push({c:'crit',ic:'📉',t:`Maior déficit: <b>${b.nome}</b> (${b.saldo}) — verificar faltas/registro.`});}
+  if(pos.length){const t=pos[0];ins.push({c:'good',ic:'🏆',key:'topPos',t:`Maior saldo positivo: <b>${t.nome}</b> (${t.saldo}) — ${t.setor}/${t.sub}.<div class="meta">Candidato a folga${t.tipo==='HORISTA'?' — HORISTA: compensar via pagamento':''}. Clique para ver o ranking completo.</div>`});}
+  if(neg.length){const b=neg[neg.length-1];ins.push({c:'crit',ic:'📉',key:'topNeg',t:`Maior déficit: <b>${b.nome}</b> (${b.saldo}) — verificar faltas/registro.<div class="meta">Clique para ver todos os saldos negativos.</div>`});}
   const ps={};dados.forEach(r=>{ps[r.setor]=(ps[r.setor]||0)+r.mins;});const ar=Object.entries(ps).sort((a,b)=>a[1]-b[1]);
-  if(ar.length&&ar[0][1]<0)ins.push({c:'warn',ic:'🏭',t:`Setor com maior déficit: <b>${ar[0][0]}</b> (${hhmm(ar[0][1])}).`});
-  if(ar.length&&ar[ar.length-1][1]>0)ins.push({c:'good',ic:'✅',t:`Setor com maior superávit: <b>${ar[ar.length-1][0]}</b> (${hhmm(ar[ar.length-1][1])}).`});
+  if(ar.length&&ar[0][1]<0)ins.push({c:'warn',ic:'🏭',key:'setorPior',extra:ar[0][0],t:`Setor com maior déficit: <b>${ar[0][0]}</b> (${hhmm(ar[0][1])}).<div class="meta">Clique para ver o setor.</div>`});
+  if(ar.length&&ar[ar.length-1][1]>0)ins.push({c:'good',ic:'✅',key:'setorMelhor',extra:ar[ar.length-1][0],t:`Setor com maior superávit: <b>${ar[ar.length-1][0]}</b> (${hhmm(ar[ar.length-1][1])}).<div class="meta">Clique para ver o setor.</div>`});
   const hp=pos.filter(r=>r.tipo==='HORISTA');
-  if(hp.length)ins.push({c:'warn',ic:'⚠️',t:`<b>${hp.length} horista(s)</b> com saldo positivo: ${hp.map(h=>h.nome).join(', ')}.<div class="meta">Não entram na escala de folgas — compensar via pagamento.</div>`});
-  el('insightsBanco').innerHTML=ins.map(x=>`<div class="insight ${x.c}" style="cursor:default"><div class="ic">${x.ic}</div><div class="txt">${x.t}</div></div>`).join('')||'<div class="insight"><div class="ic">ℹ️</div><div class="txt">Sem dados.</div></div>';
+  if(hp.length)ins.push({c:'warn',ic:'⚠️',key:'horistas',t:`<b>${hp.length} horista(s)</b> com saldo positivo: ${hp.map(h=>h.nome).join(', ')}.<div class="meta">Não entram na escala de folgas — compensar via pagamento. Clique para detalhar.</div>`});
+  el('insightsBanco').innerHTML=ins.map((x,i)=>`<div class="insight ${x.c}" data-i="${i}"><div class="ic">${x.ic}</div><div class="txt">${x.t}</div>${x.key?'<div class="arrow">›</div>':''}</div>`).join('')||'<div class="insight"><div class="ic">ℹ️</div><div class="txt">Sem dados.</div></div>';
+  el('insightsBanco').querySelectorAll('.insight').forEach((d,i)=>{if(ins[i].key)d.addEventListener('click',()=>modalInsightBanco(ins[i],dados));});
+}
+function modalInsightBanco(ins,dados){
+  let body='';
+  if(ins.key==='topPos'||ins.key==='topNeg'){
+    const lista=[...dados].filter(r=>ins.key==='topPos'?r.mins>0:r.mins<0).sort((a,b)=>ins.key==='topPos'?b.mins-a.mins:a.mins-b.mins);
+    body=`<table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Setor</th><th>Saldo</th></tr></thead><tbody>
+      ${lista.map(r=>`<tr><td class="tbl-link" onclick="irPara(()=>modalColabBanco('${r.nome.replace(/'/g,"\\'")}'))"><b>${r.nome}</b></td><td>${r.setor}</td><td style="color:${r.mins>0?'var(--verde)':'var(--vermelho)'};font-weight:700">${r.saldo}</td></tr>`).join('')}
+      </tbody></table>`;
+    abrirModal(ins.key==='topPos'?'🏆 Maiores saldos positivos':'📉 Maiores déficits', lista.length+' colaborador(es)', body, ()=>modalInsightBanco(ins,dados));
+  }else if(ins.key==='setorPior'||ins.key==='setorMelhor'){
+    irPara(()=>modalSetorBanco(ins.extra));
+  }else if(ins.key==='horistas'){
+    const hp=dados.filter(r=>r.mins>0&&r.tipo==='HORISTA');
+    body=`<p style="font-size:.86rem;color:var(--cinza);margin-bottom:10px">Horistas não entram na escala de folgas — o saldo deles deve ser compensado via pagamento de horas extras, não por folga.</p>
+      <table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Setor</th><th>Saldo</th></tr></thead><tbody>
+      ${hp.map(r=>`<tr><td class="tbl-link" onclick="irPara(()=>modalColabBanco('${r.nome.replace(/'/g,"\\'")}'))"><b>${r.nome}</b></td><td>${r.setor}</td><td style="color:var(--verde);font-weight:700">${r.saldo}</td></tr>`).join('')}
+      </tbody></table>`;
+    abrirModal('⚠️ Horistas com saldo positivo', hp.length+' colaborador(es)', body, ()=>modalInsightBanco(ins,dados));
+  }
+}
+function modalColabBanco(nome){
+  const r=BANCO.find(x=>x.nome===nome);
+  if(!r){return;}
+  const doSetor=BANCO.filter(x=>x.setor===r.setor);
+  const mediaSetor=doSetor.length?doSetor.reduce((a,x)=>a+x.mins,0)/doSetor.length:0;
+  const rankSetor=[...doSetor].sort((a,b)=>b.mins-a.mins);
+  const posicao=rankSetor.findIndex(x=>x.nome===nome)+1;
+
+  let diag='',sev='info',acao='';
+  if(r.tipo==='HORISTA'&&r.mins>0){
+    sev='warn';
+    diag=`<b>Horista com saldo positivo (${r.saldo}).</b> Horistas não entram na escala de folgas — o saldo acumulado representa horas extras já trabalhadas que precisam virar pagamento.`;
+    acao=`<div class="acao-box warn">💰 <b>Processar pagamento de HE.</b> Encaminhar ao financeiro/RH para pagamento das ${r.saldo} acumuladas. Não oferecer folga como compensação.</div>`;
+  }else if(r.mins>1200){ // >20h positivo
+    sev='warn';
+    diag=`<b>Saldo positivo elevado (${r.saldo}).</b> Acúmulo grande pode indicar sobrecarga de trabalho constante ou dificuldade em tirar folgas — vale entender a causa antes de só agendar o abatimento.`;
+    acao=`<div class="acao-box warn">📅 <b>Conversa + agendamento de folga.</b> Combine com a pessoa uma data para abater parte do saldo, e converse sobre por que o acúmulo ficou tão alto — pode sinalizar necessidade de mais gente no setor.</div>`;
+  }else if(r.mins>0){
+    sev='good';
+    diag=`<b>Saldo positivo (${r.saldo}).</b> Dentro do normal — candidato a abatimento via folga, conforme a política da empresa.`;
+    acao=`<div class="acao-box good">📅 <b>Agendar folga.</b> Combine com a liderança uma data para o abatimento do saldo.</div>`;
+  }else if(r.mins<-600){ // déficit > 10h
+    sev='crit';
+    diag=`<b>Déficit relevante (${r.saldo}).</b> Um saldo negativo desse tamanho normalmente não é só "chegou atrasado alguns dias" — vale investigar se há faltas não descontadas corretamente, licenças mal lançadas, ou erro de registro recorrente.`;
+    acao=`<div class="acao-box crit">🔍 <b>Investigar antes de cobrar.</b> Confira com o RH se todas as faltas/afastamentos do período estão corretamente lançados antes de tratar isso como problema do colaborador.</div>`;
+  }else if(r.mins<0){
+    sev='warn';
+    diag=`<b>Saldo negativo (${r.saldo}).</b> Dentro do esperado se for pontual (poucas faltas/ajustes); merece atenção se for tendência recorrente mês a mês.`;
+    acao=`<div class="acao-box warn">👀 <b>Acompanhar.</b> Se o déficit persistir nos próximos fechamentos, vale uma conversa para entender a causa.</div>`;
+  }else{
+    diag=`Saldo zerado — sem pendências no banco de horas.`;
+    acao=`<div class="acao-box good">✅ Nenhuma ação necessária.</div>`;
+  }
+
+  // cruzamento com dados de PONTO, se disponíveis — é o que dá profundidade real ao detalhe
+  let cruzamento='';
+  if(typeof PONTO!=='undefined' && PONTO.length){
+    const p=perfilColab(nome);
+    if(p.dias.length){
+      const tem=p.totNok>0||p.totEsq>0;
+      const geradaPonto=p.regs.reduce((s,x)=>s+(x.horasGeradas||0),0);
+      cruzamento=`<h4>🔗 Relação com o ponto</h4>
+        <div class="mstat" style="grid-template-columns:1fr 1fr">
+          <div class="b"><div class="v">${r.saldo}</div><div class="k">Saldo banco de horas (oficial)</div></div>
+          <div class="b" style="${geradaPonto>0?'background:#FDF0E4':''}"><div class="v" style="${geradaPonto>0?'color:var(--laranja)':''}">${hhmm(geradaPonto)}</div><div class="k">HE não autoriz. estimada no ponto</div></div>
+        </div>
+        <p style="font-size:.74rem;color:var(--cinza);margin-bottom:8px">São duas fontes diferentes — não precisam bater. O banco de horas é o valor oficial; a estimativa do ponto é calculada só pelos horários de entrada/saída e pode não refletir ajustes já feitos no banco de horas.</p>
+        <div class="acao-box ${tem?'warn':'good'}">
+        ${tem
+          ? `No período de ponto analisado, ${primeiroNome(nome)} teve <b>${p.totNok} irregularidade(s) de horário</b>${p.totEsq?` e <b>${p.totEsq} esquecimento(s) de registro</b>`:''}, com conformidade de ${p.taxaConf}%. Isso pode ajudar a explicar parte do saldo do banco de horas — vale olhar os dois relatórios juntos antes da conversa.`
+          : `No período de ponto analisado, ${primeiroNome(nome)} está com ${p.taxaConf}% de conformidade e sem irregularidades — o saldo do banco de horas não parece estar ligado a problema de disciplina de ponto.`}
+        </div>
+        <button class="btn sm ghost" onclick="irPara(()=>modalColab('${nome.replace(/'/g,"\\'")}'))">Ver perfil completo de ponto →</button>`;
+    }
+  }
+
+  const body=`
+    <div class="mstat">
+      <div class="b ${r.mins>0?'verde':r.mins<0?'verm':''}"><div class="v">${r.saldo}</div><div class="k">Saldo atual</div></div>
+      <div class="b"><div class="v">${hhmm(Math.round(mediaSetor))}</div><div class="k">Média do setor</div></div>
+      <div class="b"><div class="v">${posicao}º</div><div class="k">de ${doSetor.length} no setor</div></div>
+    </div>
+    <p style="font-size:.82rem;color:var(--cinza)">${r.setor} · ${r.sub} ${r.tipo==='HORISTA'?'· <span class="pill horista">horista</span>':''}</p>
+    <h4>🩺 Diagnóstico</h4>
+    <div class="acao-box ${sev}">${diag}</div>
+    <h4>🎯 Ação recomendada</h4>
+    ${acao}
+    ${cruzamento}
+    <h4>📊 Comparação com o setor</h4>
+    <table class="mini-tbl"><thead><tr><th>#</th><th>Colaborador</th><th>Saldo</th></tr></thead><tbody>
+    ${rankSetor.slice(0,8).map((x,i)=>`<tr style="${x.nome===nome?'background:var(--roxo-lav)':''}"><td>${i+1}</td><td class="tbl-link" onclick="irPara(()=>modalColabBanco('${x.nome.replace(/'/g,"\\'")}'))">${x.nome===nome?'<b>':''}${x.nome}${x.nome===nome?'</b>':''}</td><td style="color:${x.mins>0?'var(--verde)':x.mins<0?'var(--vermelho)':'var(--cinza)'};font-weight:700">${x.saldo}</td></tr>`).join('')}
+    </tbody></table>`;
+  abrirModal('👤 '+nome, r.setor+' · '+r.sub, body, ()=>modalColabBanco(nome));
+}
+function modalSetorBanco(setor){
+  const dados=bancoFiltrado();
+  const rr=dados.filter(r=>r.setor===setor).sort((a,b)=>b.mins-a.mins);
+  const an=analiseSetorBanco(dados).find(a=>a.setor===setor);
+  if(!an){return;}
+  const body=`
+    <div class="mstat">
+      <div class="b"><div class="v">${an.headcount}</div><div class="k">Equipe</div></div>
+      <div class="b ${an.liquido>=0?'verde':'verm'}"><div class="v">${hhmm(an.liquido)}</div><div class="k">Saldo líquido</div></div>
+      <div class="b"><div class="v">${hhmm(Math.round(an.liquidoPorPessoa))}</div><div class="k">Líquido/pessoa</div></div>
+    </div>
+    <h4>📋 Ranking do setor</h4>
+    <table class="mini-tbl"><thead><tr><th>Colaborador</th><th>Saldo</th></tr></thead><tbody>
+    ${rr.map(r=>{const hz=r.tipo==='HORISTA'?' <span class="pill horista">horista</span>':'';
+      return `<tr><td class="tbl-link" onclick="irPara(()=>modalColabBanco('${r.nome.replace(/'/g,"\\'")}'))"><b>${r.nome}</b>${hz}</td><td style="color:${r.mins>0?'var(--verde)':r.mins<0?'var(--vermelho)':'var(--cinza)'};font-weight:700">${r.saldo}</td></tr>`;}).join('')}
+    </tbody></table>`;
+  abrirModal('🏦 '+setor, an.headcount+' colaboradores · saldo líquido '+hhmm(an.liquido), body, ()=>modalSetorBanco(setor));
 }
 function renderChartsBanco(dados){
   const ps={};dados.forEach(r=>{ps[r.setor]=(ps[r.setor]||0)+r.mins;});
   const st=Object.keys(ps).sort((a,b)=>ps[b]-ps[a]);
   mkChart('chBancoSetor','bar',{labels:st,datasets:[{label:'Saldo (h)',data:st.map(s=>+(ps[s]/60).toFixed(1)),
     backgroundColor:st.map(s=>ps[s]>=0?'#1E9E5A':'#D63A4A')}]},
-    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>hhmm(ps[st[c.dataIndex]])}}},scales:{y:{ticks:{callback:v=>v+'h'}}}});
+    {plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>hhmm(ps[st[c.dataIndex]])}}},scales:{y:{ticks:{callback:v=>v+'h'}}}},
+    (evt,elems)=>{ if(elems&&elems.length) modalSetorBanco(st[elems[0].index]); });
   const top=dados.filter(r=>r.mins>0).slice(0,10);
   mkChart('chBancoTop','bar',{labels:top.map(r=>primeiroNome(r.nome)),datasets:[{label:'Horas',data:top.map(r=>+(r.mins/60).toFixed(1)),backgroundColor:'#6B21C7'}]},
-    {indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>top[c.dataIndex].saldo}}},scales:{x:{ticks:{callback:v=>v+'h'}}}});
+    {indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>top[c.dataIndex].saldo}}},scales:{x:{ticks:{callback:v=>v+'h'}}}},
+    (evt,elems)=>{ if(elems&&elems.length) modalColabBanco(top[elems[0].index].nome); });
 }
 function renderTableBanco(dados){
   const cols=['#','Colaborador','Setor','Sub área','Saldo','Situação'];
@@ -1373,7 +1511,7 @@ function renderTableBanco(dados){
   if(!dados.length){tb.innerHTML=`<tr><td colspan="6" class="empty"><div class="ic">🔍</div>Nenhum registro.</td></tr>`;return;}
   tb.innerHTML=dados.map((r,i)=>{const pill=r.mins>0?'<span class="pill ok">⬆ Positivo</span>':r.mins<0?'<span class="pill nok">⬇ Negativo</span>':'<span class="pill">◼ Zero</span>';
     const hz=r.tipo==='HORISTA'?' <span class="pill horista">horista</span>':'';const cor=r.mins>0?'color:#1E9E5A':r.mins<0?'color:#D63A4A':'';
-    return `<tr><td>${i+1}</td><td><b>${r.nome}</b>${hz}</td><td>${r.setor}</td><td>${r.sub}</td><td style="font-weight:800;${cor}">${r.saldo}</td><td>${pill}</td></tr>`;}).join('');
+    return `<tr><td>${i+1}</td><td class="tbl-link" onclick="modalColabBanco('${r.nome.replace(/'/g,"\\'")}')"><b>${r.nome}</b>${hz}</td><td>${r.setor}</td><td>${r.sub}</td><td style="font-weight:800;${cor}">${r.saldo}</td><td>${pill}</td></tr>`;}).join('');
 }
 
 /* ---------- chart helper ---------- */
@@ -1407,7 +1545,7 @@ function exportPonto(){
   XLSX.utils.book_append_sheet(wb,ws2,'Irregularidades');
   // aba estratégica por setor
   const an=analiseSetor(dados);
-  const h3=['SETOR','EQUIPE','ADERÊNCIA %','IRREGULARES','PROBLEMA PRINCIPAL','HORAS PERDIDAS','PERDIDA/PESSOA','GERADAS S/ JUSTIF','MAIOR OFENSOR'];
+  const h3=['SETOR','EQUIPE','ADERÊNCIA %','IRREGULARES','PROBLEMA PRINCIPAL','HORAS PERDIDAS','PERDIDA/PESSOA','HE NÃO AUTORIZ. (PONTO)','MAIOR OFENSOR'];
   const b3=an.sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa).map(a=>[a.setor,a.headcount,a.aderencia==null?'—':a.aderencia,a.nok,a.problema,hhmm(a.perdida),hhmm(Math.round(a.perdidaPorPessoa)),hhmm(a.gerada),a.topOfensor?a.topOfensor.nome:'—']);
   const ws3=XLSX.utils.aoa_to_sheet([h3,...b3]);
   ws3['!cols']=[{wch:20},{wch:10},{wch:12},{wch:12},{wch:18},{wch:16},{wch:16},{wch:18},{wch:34}];
@@ -1448,7 +1586,7 @@ async function exportPontoColorido(){
   // aba estratégica com cores por semáforo de aderência
   const an=analiseSetor(dados).sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa);
   const ws2=wb.addWorksheet('Visão Estratégica');
-  const h2=['SETOR','EQUIPE','ADERÊNCIA %','IRREGULARES','PROBLEMA PRINCIPAL','HORAS PERDIDAS','PERDIDA/PESSOA','GERADAS S/ JUSTIF','MAIOR OFENSOR'];
+  const h2=['SETOR','EQUIPE','ADERÊNCIA %','IRREGULARES','PROBLEMA PRINCIPAL','HORAS PERDIDAS','PERDIDA/PESSOA','HE NÃO AUTORIZ. (PONTO)','MAIOR OFENSOR'];
   ws2.addRow(h2);
   ws2.getRow(1).eachCell(c=>{c.fill={type:'pattern',pattern:'solid',fgColor:{argb:'FF6B21C7'}};c.font={color:{argb:'FFFFFFFF'},bold:true};});
   ws2.columns=[{width:20},{width:10},{width:12},{width:14},{width:18},{width:14},{width:14},{width:16},{width:34}];
@@ -1508,19 +1646,24 @@ function onPonto(file){
     el('pontoContent').classList.remove('hide');renderPonto();
   }catch(e){el('pontoBanner').innerHTML='<div class="banner err">❌ Erro: '+e.message+'</div>';}});
 }
+function setBancoBanner(html){
+  el('bancoBanner').innerHTML=html;
+  const t=el('bancoBannerTop'); if(t) t.innerHTML=html;
+}
 function onBanco(file){
-  el('bancoBanner').innerHTML='<div class="banner info"><span class="spin"></span> Processando '+file.name+'…</div>';
+  setBancoBanner('<div class="banner info"><span class="spin"></span> Processando '+file.name+'…</div>');
   lerArquivo(file,rows=>{try{
     BANCO=parseBanco(rows);
-    if(!BANCO.length){el('bancoBanner').innerHTML='<div class="banner err">⚠️ Nenhum saldo encontrado.</div>';return;}
+    if(!BANCO.length){setBancoBanner('<div class="banner err">⚠️ Nenhum saldo encontrado.</div>');return;}
     const sem=[...new Set(BANCO.filter(r=>r.setor==='(sem cadastro)').map(r=>r.nome))];
-    let msg=`<div class="banner ok">✅ ${BANCO.length} colaboradores`;
+    let msg=`<div class="banner ok">✅ ${BANCO.length} colaboradores processados`;
     if(sem.length)msg+=` · 🟡 ${sem.length} sem cadastro`;
-    el('bancoBanner').innerHTML=msg+'</div>';
+    msg+=' · <a href="#" onclick="document.querySelector(\'[data-tab=banco]\').click();return false;" style="color:inherit;font-weight:800;text-decoration:underline">ver na aba Banco de Horas →</a></div>';
+    setBancoBanner(msg);
     popSelect(el('bSetor'),[...new Set(BANCO.map(r=>r.setor))].sort());
     popSelect(el('bSub'),[...new Set(BANCO.map(r=>r.sub))].sort());
     el('bancoContent').classList.remove('hide');renderBanco();
-  }catch(e){el('bancoBanner').innerHTML='<div class="banner err">❌ Erro: '+e.message+'</div>';}});
+  }catch(e){setBancoBanner('<div class="banner err">❌ Erro: '+e.message+'</div>');}});
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{
@@ -1528,6 +1671,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   await carregarBase();
   setupDrop('dzPonto','filePonto',onPonto);
   setupDrop('dzBanco','fileBanco',onBanco);
+  setupDrop('dzBancoTop','fileBancoTop',onBanco);
   document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
     document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
     el('tab-ponto').classList.toggle('hide',t.dataset.tab!=='ponto');
@@ -1565,6 +1709,13 @@ function pessoasFocais(setor,base){
     else if(v.n===2)acao='Conversa de alinhamento';
     return {nome,n:v.n,perdida:v.perdida,nEsq:v.nEsq,acao};
   });
+}
+// detalhe dia a dia de uma pessoa — dá ao gestor local o motivo exato de cada ocorrência,
+// pronto para embasar a conversa (sem precisar abrir o dashboard de novo)
+function detalheOcorrenciasPessoa(nome,base){
+  return base.filter(r=>r.nome===nome&&(r.situacao==='nok'||r.situacao==='esq'))
+    .sort((a,b)=>a.data.localeCompare(b.data))
+    .map(r=>({data:dfmt(r.data),motivo:r.situacao==='esq'?'Esqueceu de bater o retorno do almoço (registro incompleto)':r.flags.join('; ')}));
 }
 
 function abrirSelecaoResumo(){
@@ -1705,14 +1856,14 @@ function gerarPDFResumo(setoresSelecionados){
     {label:'Colaboradores',value:totHead},
     {label:'Aderência geral',value:aderGeral+'%',color:aderGeral>=80?GREEN:aderGeral>=60?YELLOW_TXT:RED},
     {label:'Horas perdidas',value:hhmm(totPerdida),color:RED},
-    {label:'Geradas s/ justif.',value:hhmm(totGerada),color:ORANGE}
+    {label:'HE não autoriz. (ponto)',value:hhmm(totGerada),color:ORANGE}
   ]);
 
   secTitle('Panorama geral',PURPLE);
   const setoresCriticos=an.filter(a=>a.aderencia!=null&&a.aderencia<60);
   const setoresSaudaveis=an.filter(a=>a.aderencia!=null&&a.aderencia>=80);
   paragraph(`No recorte analisado, ${an.length} setor(es) somam ${totHead} colaboradores com aderência geral de ${aderGeral}%. `+
-    `Isso representa ${hhmm(totPerdida)} de horas perdidas de produtividade e ${hhmm(totGerada)} em horas geradas sem justificativa (passivo de HE não autorizada). `+
+    `Isso representa ${hhmm(totPerdida)} de horas perdidas de produtividade e ${hhmm(totGerada)} de HE não autorizada detectada no ponto — uma estimativa a partir dos horários de entrada/saída, DIFERENTE do saldo oficial de banco de horas (que aparece em seção própria quando o relatório correspondente é enviado). `+
     `${setoresCriticos.length?setoresCriticos.length+' setor(es) estão em estado crítico (aderência abaixo de 60%). ':''}`+
     `${setoresSaudaveis.length?setoresSaudaveis.length+' setor(es) estão saudáveis (aderência acima de 80%).':''}`);
 
@@ -1743,7 +1894,7 @@ function gerarPDFResumo(setoresSelecionados){
   } else paragraph('Nenhum colaborador com 2 ou mais ocorrências no recorte.',GREEN);
 
   secTitle('Setores no recorte',PURPLE);
-  miniTable(['Setor','Equipe','Aderência','H. Perdidas','Perdida/Pessoa','Geradas S/J'],
+  miniTable(['Setor','Equipe','Aderência','H. Perdidas','Perdida/Pessoa','HE Não Autoriz. (ponto)'],
     [...an].sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa).map(a=>[a.setor,a.headcount+'p',a.aderencia==null?'—':a.aderencia+'%',hhmm(a.perdida),hhmm(Math.round(a.perdidaPorPessoa)),hhmm(a.gerada)]),
     [45,20,25,30,32,30]);
 
@@ -1776,7 +1927,38 @@ function gerarPDFResumo(setoresSelecionados){
     }
   });
 
-  /* ---------- UMA PÁGINA POR SETOR ---------- */
+  /* ---------- BANCO DE HORAS (só aparece se o relatório de banco foi enviado) ---------- */
+  const bancoSel = BANCO.filter(r=>setoresSelecionados.includes(r.setor));
+  if(bancoSel.length){
+    secTitle('Banco de horas por setor',PURPLE);
+    const bancoPorSetor={};
+    bancoSel.forEach(r=>{
+      if(!bancoPorSetor[r.setor])bancoPorSetor[r.setor]={pos:0,neg:0,n:0,nPos:0,nNeg:0};
+      const bs=bancoPorSetor[r.setor]; bs.n++;
+      if(r.mins>0){bs.pos+=r.mins;bs.nPos++;} else if(r.mins<0){bs.neg+=r.mins;bs.nNeg++;}
+    });
+    const bancoRows=Object.entries(bancoPorSetor).sort((a,b)=>(b[1].pos+b[1].neg)-(a[1].pos+a[1].neg));
+    miniTable(['Setor','Colab.','Saldo Positivo','Saldo Negativo','Líquido'],
+      bancoRows.map(([s,v])=>[s,v.n,hhmm(v.pos),hhmm(v.neg),hhmm(v.pos+v.neg)]),
+      [50,22,35,35,pageW-margin*2-50-22-35-35]);
+
+    const bancoPos=bancoSel.filter(r=>r.mins>0).sort((a,b)=>b.mins-a.mins);
+    const bancoNeg=bancoSel.filter(r=>r.mins<0).sort((a,b)=>a.mins-b.mins);
+    if(bancoPos.length)bullet(`Maior saldo positivo geral: ${bancoPos[0].nome} (${bancoPos[0].setor}) com ${bancoPos[0].saldo}.`,GREEN);
+    if(bancoNeg.length)bullet(`Maior déficit geral: ${bancoNeg[0].nome} (${bancoNeg[0].setor}) com ${bancoNeg[0].saldo}.`,RED);
+    const bancoHorista=bancoPos.filter(r=>r.tipo==='HORISTA');
+    if(bancoHorista.length)bullet(`${bancoHorista.length} horista(s) com saldo positivo — não entram na escala de folgas, compensar via pagamento.`,ORANGE);
+
+    // página exclusiva: todos os colaboradores do banco de horas, ordenados por setor
+    novaPagina('Banco de horas — detalhamento','Todos os colaboradores com saldo de banco de horas, ordenados por setor');
+    paragraph('Tabela completa de colaboradores com saldo de banco de horas no recorte, agrupados por setor e ordenados do maior para o menor saldo dentro de cada setor.');
+    const bancoOrdenado=[...bancoSel].sort((a,b)=> a.setor.localeCompare(b.setor) || b.mins-a.mins);
+    miniTable(['Colaborador','Setor','Sub área','Saldo'],
+      bancoOrdenado.map(r=>[r.nome+(r.tipo==='HORISTA'?' (horista)':''),r.setor,r.sub,r.saldo]),
+      [55,40,40,pageW-margin*2-55-40-40]);
+  }
+
+  /* ---------- DUAS PÁGINAS POR SETOR ---------- */
   an.sort((a,b)=>b.perdidaPorPessoa-a.perdidaPorPessoa).forEach(a=>{
     const corSem=a.aderencia==null?GRAY:a.aderencia>=80?GREEN:a.aderencia>=60?YELLOW_TXT:RED;
     novaPagina(a.setor, a.headcount+' colaboradores · aderência '+(a.aderencia==null?'—':a.aderencia+'%'), corSem);
@@ -1785,8 +1967,9 @@ function gerarPDFResumo(setoresSelecionados){
       {label:'Equipe',value:a.headcount},
       {label:'Aderência',value:a.aderencia==null?'—':a.aderencia+'%',color:a.aderencia>=80?GREEN:a.aderencia>=60?YELLOW_TXT:RED},
       {label:'Horas perdidas',value:hhmm(a.perdida),color:RED},
-      {label:'Geradas s/ justif.',value:hhmm(a.gerada),color:ORANGE}
+      {label:'HE não autoriz. (ponto)',value:hhmm(a.gerada),color:ORANGE}
     ]);
+    paragraph('Nota: "HE não autoriz. (ponto)" é uma ESTIMATIVA calculada a partir dos horários de entrada/saída do ponto — NÃO é o saldo oficial de banco de horas. É hora extra que o colaborador fez por conta própria, sem autorização da liderança, e representa custo de caixa real. Se o relatório de banco de horas também foi enviado, o saldo oficial aparece em seção própria mais adiante, para comparação — os dois números podem divergir, e isso é esperado.',GRAY);
 
     secTitle('Diagnóstico',PURPLE);
     if(a.aderencia==null)paragraph('Sem registros de presença suficientes para avaliar este setor no recorte.');
@@ -1801,12 +1984,12 @@ function gerarPDFResumo(setoresSelecionados){
     if(a.problema==='Saída antecip.')oportunidades.push('Entender se a saída antecipada é pontual ou recorrente por colaborador; alinhar expectativa de permanência até o horário fechado.');
     if(a.problema==='Esqueceu de bater')oportunidades.push('Reforçar a disciplina de registrar as 4 batidas diárias — especialmente o retorno do almoço, ponto mais comum de esquecimento.');
     if(a.perdidaPorPessoa>=30)oportunidades.push(`Perdida por colaborador de ${hhmm(Math.round(a.perdidaPorPessoa))} está acima da média — priorizar este setor nas próximas rodadas de acompanhamento.`);
-    if(a.gerada>60)oportunidades.push(`${hhmm(a.gerada)} em horas geradas sem justificativa representam passivo financeiro de HE não autorizada — validar se há necessidade real de hora extra ou se é desalinhamento de horário.`);
+    if(a.gerada>60)oportunidades.push(`${hhmm(a.gerada)} de HE não autorizada estimada a partir do ponto (entrada adiantada/retorno de almoço adiantado/saída após o horário) representam passivo financeiro — validar se há necessidade real de hora extra ou se é desalinhamento de horário. Esta é uma estimativa via ponto, não o saldo oficial de banco de horas.`);
     if(!oportunidades.length)oportunidades.push('Nenhuma oportunidade crítica identificada — setor operando dentro do esperado.');
     oportunidades.forEach(o=>bullet(o,ORANGE));
 
     secTitle('Sugestão de alinhamento',PURPLE);
-    if(a.aderencia!=null&&a.aderencia<60)paragraph('Sugere-se uma reunião formal com a liderança do setor esta semana, apresentando os dados deste relatório e definindo um plano de ação com responsável e prazo. Casos individuais reincidentes (ver pessoas focais abaixo) devem ser tratados em conversas separadas.');
+    if(a.aderencia!=null&&a.aderencia<60)paragraph('Sugere-se uma reunião formal com a liderança do setor esta semana, apresentando os dados deste relatório e definindo um plano de ação com responsável e prazo. Casos individuais reincidentes (ver detalhamento na próxima página) devem ser tratados em conversas separadas.');
     else if(a.aderencia!=null&&a.aderencia<80)paragraph('Um alinhamento coletivo rápido (5-10min em reunião de equipe) reforçando a regra e o problema dominante costuma resolver desvios neste patamar, sem necessidade de medida individual generalizada.');
     else paragraph('Setor não demanda alinhamento coletivo no momento. Reconhecimento da equipe pelo bom desempenho é uma ação de baixo custo e alto retorno.');
 
@@ -1817,6 +2000,22 @@ function gerarPDFResumo(setoresSelecionados){
         focais.map(f=>[f.nome,f.n+(f.nEsq?' ('+f.nEsq+' esq.)':''),hhmm(f.perdida),f.acao]),
         [55,28,28,pageW-margin*2-55-28-28]);
     } else paragraph('Nenhum colaborador com irregularidade recorrente neste setor.',GREEN);
+
+    /* ---------- SEGUNDA PÁGINA: detalhamento dia a dia por pessoa ---------- */
+    if(focais.length){
+      novaPagina(a.setor+' — detalhamento', 'Motivo específico de cada ocorrência, por colaborador — pronto para a conversa', corSem);
+      paragraph('Esta página traz o detalhe dia a dia de cada pessoa focal listada na página anterior, para que a liderança local não precise abrir o sistema antes da conversa — o motivo de cada ocorrência já está aqui.');
+      focais.forEach(f=>{
+        secTitle(f.nome,RED);
+        paragraph(f.n+' ocorrência(s) · '+hhmm(f.perdida)+' perdidas · Ação sugerida: '+f.acao,GRAY);
+        const dets=detalheOcorrenciasPessoa(f.nome,base);
+        if(dets.length){
+          miniTable(['Data','Motivo específico'], dets.map(d=>[d.data,d.motivo]), [25,pageW-margin*2-25]);
+        } else {
+          paragraph('Sem detalhe adicional disponível.',GRAY);
+        }
+      });
+    }
   });
 
   footer();
@@ -1824,7 +2023,7 @@ function gerarPDFResumo(setoresSelecionados){
 }
 
 
-window.modalColab=modalColab;window.fecharModal=fecharModal;window.modalSetor=modalSetor;window.irPara=irPara;window.voltarModal=voltarModal;window.glossPopup=glossPopup;window.abrirSelecaoResumo=abrirSelecaoResumo;window.modalTipoOcorrencia=modalTipoOcorrencia;
+window.modalColab=modalColab;window.fecharModal=fecharModal;window.modalSetor=modalSetor;window.irPara=irPara;window.voltarModal=voltarModal;window.glossPopup=glossPopup;window.abrirSelecaoResumo=abrirSelecaoResumo;window.modalTipoOcorrencia=modalTipoOcorrencia;window.modalColabBanco=modalColabBanco;window.modalSetorBanco=modalSetorBanco;
 
 </script>
 </body>
