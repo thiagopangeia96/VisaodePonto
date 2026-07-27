@@ -428,7 +428,7 @@ const GLOSSARIO={
   homeoffice:`Colaborador remoto — não está sujeito à métrica de ponto presencial. As batidas são informativas e não geram irregularidade nem hora perdida.`,
   horista:`Remunerado por hora trabalhada. Não entra na escala de folgas para abatimento de banco de horas; eventual saldo é compensado via pagamento.`,
   absenteismo:`<b>KPI padrão de RH:</b> (horas de falta não justificada + horas de atestado) ÷ horas previstas no período. Diferente da aderência — aqui só entra <b>ausência</b> (faltar o dia todo), não atraso de quem esteve presente. Fórmula e nome usados no mercado de RH.`,
-  nota:`Placar único (0-100) de pontualidade e assiduidade. Começa em 100 e desconta: <b>-15 por falta não justificada</b>, <b>-5 por dia de atestado</b>, <b>-2 por hora de atraso</b> (real, já considerando a tolerância legal), <b>-3 por esquecimento de registro</b>. Férias, feriado, folga, licença e afastamento NÃO descontam.`,
+  nota:`Placar único (0-100) de pontualidade e assiduidade. Começa em 100 e desconta: <b>-15 por falta não justificada</b>, <b>-5 por dia de atestado</b>, <b>-4 por dia com irregularidade de horário</b>, <b>-3 por esquecimento de registro</b>, e um desconto menor (-1/hora) pela magnitude total dos atrasos. Pesa mais a <b>quantidade de vezes que acontece</b> do que o tamanho de cada desvio — reincidência é o que mais importa pra disciplina. Férias, feriado, folga, licença e afastamento NÃO descontam.`,
   tipoOcorr:`Distribuição das irregularidades de horário entre <b>atraso de entrada</b>, <b>almoço acima do limite</b> e <b>saída antecipada</b>. Não inclui esquecimento de batida (que é irregularidade de registro).`,
   irregCombo:`Total combinado de irregularidades do setor: <b>de horário</b> (atraso/saída/almoço) <b>+ de registro</b> (esqueceu de bater ponto). As duas contam contra a aderência do setor.`,
   perdidaPessoaChart:`Horas perdidas do setor divididas pelo nº de pessoas — permite comparar setores de tamanhos diferentes.`
@@ -777,25 +777,30 @@ function fecharModal(){el('modalRoot').innerHTML='';document.removeEventListener
    produtividade). Férias, feriado, folga, licença e afastamento NÃO descontam. */
 function calcularNota(nome){
   const regs=PONTO.filter(r=>r.nome===nome&&!r.homeoffice);
-  let faltaNJ=0,atestado=0,esqN=0,horasPerdidasTotal=0;
+  let faltaNJ=0,atestado=0,esqN=0,nokN=0,horasPerdidasTotal=0;
   regs.forEach(r=>{
     if(r.situacao==='aus'){
       if(r.tipoAusencia==='Falta Não Justificada')faltaNJ++;
       else if(isAtestado(r.tipoAusencia))atestado++;
     }
     if(r.situacao==='esq')esqN++;
+    if(r.situacao==='nok')nokN++;
     horasPerdidasTotal+=(r.horasPerdidas||0);
   });
   const horasAtraso=horasPerdidasTotal/60;
-  let nota=100-15*faltaNJ-5*atestado-2*horasAtraso-3*esqN;
+  // Pesa principalmente a QUANTIDADE de ocorrências (recorrência é o que importa pra
+  // disciplina), com a magnitude em horas entrando como fator secundário — evita o caso
+  // de alguém reincidente em muitos dias "escapar" só porque cada desvio foi pequeno.
+  let nota=100-15*faltaNJ-5*atestado-4*nokN-3*esqN-1*horasAtraso;
   nota=Math.max(0,Math.round(nota));
   const partes=[];
   if(faltaNJ>0)partes.push(faltaNJ+' falta(s) não justificada(s) (-'+(15*faltaNJ)+')');
   if(atestado>0)partes.push(atestado+' atestado(s) (-'+(5*atestado)+')');
-  if(horasAtraso>0.05)partes.push('atrasos '+horasAtraso.toFixed(1)+'h (-'+(2*horasAtraso).toFixed(1)+')');
+  if(nokN>0)partes.push(nokN+' irregularidade(s) de horário (-'+(4*nokN)+')');
   if(esqN>0)partes.push(esqN+' esquecimento(s) de registro (-'+(3*esqN)+')');
+  if(horasAtraso>0.05)partes.push('magnitude dos atrasos '+horasAtraso.toFixed(1)+'h (-'+(1*horasAtraso).toFixed(1)+')');
   const motivo=partes.length?partes.join('; '):'Sem descontos — pontualidade e assiduidade em dia';
-  return {nota,motivo,faltaNJ,atestado,esqN,horasAtraso};
+  return {nota,motivo,faltaNJ,atestado,esqN,nokN,horasAtraso};
 }
 
 function modalColab(nome){
@@ -1367,7 +1372,7 @@ function consolidar(dados){
   });
   return Object.values(byC).map(c=>{
     const horasAtraso=c.perdida/60;
-    const nota=Math.max(0,Math.round(100-15*c.nFaltaNJ-5*c.nAtestado-2*horasAtraso-3*c.nEsq));
+    const nota=Math.max(0,Math.round(100-15*c.nFaltaNJ-5*c.nAtestado-4*c.nNok-3*c.nEsq-1*horasAtraso));
     return {...c,
     diasN:c.dias.size,
     presenca:c.nOk+c.nNok,
@@ -1811,7 +1816,7 @@ function onBanco(file){
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{
-  const bt=el('buildTag'); if(bt) bt.textContent='build 2026-07-27 17:00';
+  const bt=el('buildTag'); if(bt) bt.textContent='build 2026-07-27 17:25';
   await carregarBase();
   setupDrop('dzPonto','filePonto',onPonto);
   setupDrop('dzBanco','fileBanco',onBanco);
