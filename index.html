@@ -1816,7 +1816,7 @@ function onBanco(file){
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{
-  const bt=el('buildTag'); if(bt) bt.textContent='build 2026-07-27 17:25';
+  const bt=el('buildTag'); if(bt) bt.textContent='build 2026-07-27 17:43';
   await carregarBase();
   setupDrop('dzPonto','filePonto',onPonto);
   setupDrop('dzBanco','fileBanco',onBanco);
@@ -1859,18 +1859,19 @@ function pessoasFocais(setor,base){
     return {nome,n:v.n,perdida:v.perdida,nEsq:v.nEsq,acao};
   });
 }
-// TOP 3 destaques do setor: só entra quem tirou Nota 100 (zero desconto de
-// qualquer tipo — sem falta, atestado, atraso ou esquecimento no período).
-// Se ninguém atingir isso, a lista vem vazia de propósito — não força destaque
-// artificial. Em caso de empate, desempata por mais dias trabalhados (consistência).
+// TOP 3 destaques do setor: quem tirou Nota 90 ou mais no período. Se ninguém
+// atingir isso, a lista vem vazia de propósito — não força destaque artificial.
+// Ordenado por maior nota primeiro; empate desempata por mais dias trabalhados
+// (consistência ao longo do período conta).
+const DESTAQUE_NOTA_MIN=90;
 function destaquesSetor(setor,base){
   const pessoas=[...new Set(base.filter(r=>r.setor===setor&&!r.homeoffice).map(r=>r.nome))];
   const candidatos=pessoas.map(nome=>{
     const info=calcularNota(nome);
     const dias=new Set(base.filter(r=>r.nome===nome).map(r=>r.data)).size;
     return {nome,nota:info.nota,dias};
-  }).filter(x=>x.nota===100);
-  return candidatos.sort((a,b)=>b.dias-a.dias).slice(0,3);
+  }).filter(x=>x.nota>=DESTAQUE_NOTA_MIN);
+  return candidatos.sort((a,b)=>b.nota-a.nota||b.dias-a.dias).slice(0,3);
 }
 // detalhe dia a dia de uma pessoa — dá ao gestor local o motivo exato de cada ocorrência,
 // pronto para embasar a conversa (sem precisar abrir o dashboard de novo)
@@ -2158,11 +2159,11 @@ function gerarPDFResumo(setoresSelecionados){
     secTitle('Destaques do setor',GREEN);
     const destaques=destaquesSetor(a.setor,base);
     if(destaques.length){
-      paragraph('Colaboradores com Nota 100 no período — zero falta, atestado, atraso ou esquecimento de registro. Use como referência positiva com a equipe.',GRAY);
+      paragraph('Colaboradores com Nota 90 ou mais no período — pontualidade e assiduidade em nível de referência. Use como exemplo positivo com a equipe.',GRAY);
       miniTable(['Colaborador','Dias trabalhados','Nota'],
         destaques.map(d=>[d.nome,d.dias,d.nota]),
         [90,pageW-margin*2-90-30,30]);
-    } else paragraph('Nenhum colaborador com Nota 100 (zero desconto) neste setor no período.',GRAY);
+    } else paragraph('Nenhum colaborador atingiu Nota 90 neste setor no período.',GRAY);
 
     secTitle('Pessoas focais para feedback',RED);
     const focais=pessoasFocais(a.setor,base);
