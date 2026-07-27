@@ -427,6 +427,8 @@ const GLOSSARIO={
   esqueceu:`O colaborador saiu para o almoço mas não registrou a volta; o próximo ponto é o do fim do dia. O almoço aparece irreal (>2h). É cobrado como irregularidade de registro, mas não penaliza horas perdidas.`,
   homeoffice:`Colaborador remoto — não está sujeito à métrica de ponto presencial. As batidas são informativas e não geram irregularidade nem hora perdida.`,
   horista:`Remunerado por hora trabalhada. Não entra na escala de folgas para abatimento de banco de horas; eventual saldo é compensado via pagamento.`,
+  absenteismo:`<b>KPI padrão de RH:</b> (horas de falta não justificada + horas de atestado) ÷ horas previstas no período. Diferente da aderência — aqui só entra <b>ausência</b> (faltar o dia todo), não atraso de quem esteve presente. Fórmula e nome usados no mercado de RH.`,
+  nota:`Placar único (0-100) de pontualidade e assiduidade. Começa em 100 e desconta: <b>-15 por falta não justificada</b>, <b>-5 por dia de atestado</b>, <b>-2 por hora de atraso</b> (real, já considerando a tolerância legal), <b>-3 por esquecimento de registro</b>. Férias, feriado, folga, licença e afastamento NÃO descontam.`,
   tipoOcorr:`Distribuição das irregularidades de horário entre <b>atraso de entrada</b>, <b>almoço acima do limite</b> e <b>saída antecipada</b>. Não inclui esquecimento de batida (que é irregularidade de registro).`,
   irregCombo:`Total combinado de irregularidades do setor: <b>de horário</b> (atraso/saída/almoço) <b>+ de registro</b> (esqueceu de bater ponto). As duas contam contra a aderência do setor.`,
   perdidaPessoaChart:`Horas perdidas do setor divididas pelo nº de pessoas — permite comparar setores de tamanhos diferentes.`
@@ -441,7 +443,7 @@ const GLOSS_TITULO={tolerancia:'Tolerância legal (Art. 58 CLT)',conforme:'Confo
   irregRegistro:'Irregularidade de registro',ausente:'Ausente',atrasoEntrada:'Atraso na entrada',almocoExtra:'Almoço acima do limite',
   saidaAntec:'Saída antecipada',horaPerdida:'Horas perdidas',horaGerada:'HE não autorizada — estimativa via ponto',aderencia:'Aderência ao ponto',
   perdidaPessoa:'Perdida por colaborador',reincidente:'Colaborador reincidente',tendencia:'Tendência',diaCheio:'Dia fechado',
-  esqueceu:'Esqueceu de bater ponto',homeoffice:'Home office',horista:'Horista',tipoOcorr:'Tipo de ocorrência'};
+  esqueceu:'Esqueceu de bater ponto',homeoffice:'Home office',horista:'Horista',tipoOcorr:'Tipo de ocorrência',absenteismo:'Absenteísmo',nota:'Nota de pontualidade e assiduidade'};
 function helpTh(chave){
   return `<span class="help" onclick="event.stopPropagation();glossPopup('${chave}')" style="cursor:pointer">ⓘ</span>`;
 }
@@ -462,6 +464,35 @@ function titleCase(s){
     return w.charAt(0).toUpperCase()+w.slice(1);
   }).join(' ');
 }
+
+/* Classifica o texto de observação (ausência) em categorias padrão — mesma
+   lógica de negócio usada em relatórios de RH de mercado. Categorias que NÃO
+   penalizam (justificadas) ficam separadas das que penalizam a Nota/Absenteísmo. */
+const AUSENCIA_JUSTIFICADAS=new Set(['Férias','Feriado','Folga','Licença Maternidade','Acidente de Trabalho',
+  'Serviço Militar','Luto','Exames Ocupacionais','Abono','Quitação Banco de Horas','Banco de Horas (folga)']);
+function classifyAusencia(txt){
+  if(!txt) return null;
+  const u=txt.toUpperCase();
+  if(u.includes('FÉRIAS')||u.includes('FERIAS')) return 'Férias';
+  if(u.includes('MILITAR')) return 'Serviço Militar';
+  if(u.includes('FALTA')&&(u.includes('JUSTIFIC')||u.includes('NAO')||u.includes('NÃO'))) return 'Falta Não Justificada';
+  if(u.includes('FALTA')) return 'Falta Não Justificada';
+  if(u.includes('ATESTADO')&&u.includes('COMPARECIMENTO')) return 'Atestado de Comparecimento';
+  if(u.includes('ATESTADO')&&u.includes('ACOMPANHAMENTO')) return 'Atestado de Acompanhamento';
+  if(u.includes('COMPARECIMENTO')) return 'Atestado de Comparecimento';
+  if(u.includes('ATESTADO')) return 'Atestado Médico';
+  if(u.includes('MATERNIDADE')) return 'Licença Maternidade';
+  if(u.includes('ACIDENTE')) return 'Acidente de Trabalho';
+  if(u.includes('EXAME')||u.includes('OCUPACIONA')) return 'Exames Ocupacionais';
+  if(u.includes('LUTO')) return 'Luto';
+  if(u.includes('QUITA')) return 'Quitação Banco de Horas';
+  if(u.includes('BANCO DE HORAS')) return 'Banco de Horas (folga)';
+  if(u.includes('FOLGA')) return 'Folga';
+  if(u.includes('FERIADO')) return 'Feriado';
+  if(u.includes('ABONO')) return 'Abono';
+  return titleCase(txt); // categoria não mapeada — mantém o texto original formatado
+}
+function isAtestado(tipo){ return tipo && tipo.startsWith('Atestado'); }
 
 function findBase(nome){
   const n=norm(nome); let h=BASE.find(b=>norm(b.nome)===n); if(h)return h;
@@ -564,7 +595,7 @@ function avaliar(r){
   // HOME OFFICE: não se enquadra na métrica de ponto presencial → sempre conforme
   if(tipo==='HOME OFFICE'){
     return {...r,setor,sub,tipo,isLog:false,refE:'—',refS:'—',dE:null,dS:null,dR:null,durAlm:null,
-      flags:[],detalhe:{},situacao:'ok',status:'🏠 Home office',homeoffice:true,horasPerdidas:0,horasGeradas:0};
+      flags:[],detalhe:{},situacao:'ok',status:'🏠 Home office',homeoffice:true,horasPerdidas:0,horasGeradas:0,tipoAusencia:null};
   }
   const isLog=setor==='LOGÍSTICA';
   const refE=b?b.entrada:'08:00';
@@ -622,11 +653,11 @@ function avaliar(r){
     // batidas embaralhadas por esquecimento → qualquer penalidade de horas é ruído
     horasPerdidas=0; horasGeradas=0; flags.length=0;
   }
-  let situacao='ok',status='✅ Conforme';
-  if(r.obs){situacao='aus';status='📋 '+r.obs;}
+  let situacao='ok',status='✅ Conforme',tipoAusencia=null;
+  if(r.obs){situacao='aus';status='📋 '+r.obs;tipoAusencia=classifyAusencia(r.obs);}
   else if(esqueceu){situacao='esq';status='🕳 Esqueceu de bater ponto';}
   else if(flags.length){situacao='nok';status='⚠️ '+flags.join(' · ');}
-  return {...r,setor,sub,tipo,isLog,refE,refS,dE,dS,dR,durAlm,flags,detalhe,situacao,status,horasPerdidas,horasGeradas,esqueceu};
+  return {...r,setor,sub,tipo,isLog,refE,refS,dE,dS,dR,durAlm,flags,detalhe,situacao,status,horasPerdidas,horasGeradas,esqueceu,tipoAusencia};
 }
 
 function parseBanco(rows){
@@ -739,6 +770,34 @@ function limparChartsModal(){Object.keys(charts).forEach(k=>{if(k.startsWith('m_
 function fecharModal(){el('modalRoot').innerHTML='';document.removeEventListener('keydown',escClose);MODAL_STACK=[];window.__modalAtual=null;limparChartsModal();}
 
 /* ---- modal de colaborador (o coração do drill-down) ---- */
+/* Nota de pontualidade e assiduidade (0-100) — inspirada em modelo de RH de
+   mercado. Começa em 100 e desconta pelo que realmente pesa: falta não
+   justificada é o mais grave, depois atestado, depois atraso por hora.
+   Esquecimento de registro pesa pouco (é falha de disciplina, não de
+   produtividade). Férias, feriado, folga, licença e afastamento NÃO descontam. */
+function calcularNota(nome){
+  const regs=PONTO.filter(r=>r.nome===nome&&!r.homeoffice);
+  let faltaNJ=0,atestado=0,esqN=0,horasPerdidasTotal=0;
+  regs.forEach(r=>{
+    if(r.situacao==='aus'){
+      if(r.tipoAusencia==='Falta Não Justificada')faltaNJ++;
+      else if(isAtestado(r.tipoAusencia))atestado++;
+    }
+    if(r.situacao==='esq')esqN++;
+    horasPerdidasTotal+=(r.horasPerdidas||0);
+  });
+  const horasAtraso=horasPerdidasTotal/60;
+  let nota=100-15*faltaNJ-5*atestado-2*horasAtraso-3*esqN;
+  nota=Math.max(0,Math.round(nota));
+  const partes=[];
+  if(faltaNJ>0)partes.push(faltaNJ+' falta(s) não justificada(s) (-'+(15*faltaNJ)+')');
+  if(atestado>0)partes.push(atestado+' atestado(s) (-'+(5*atestado)+')');
+  if(horasAtraso>0.05)partes.push('atrasos '+horasAtraso.toFixed(1)+'h (-'+(2*horasAtraso).toFixed(1)+')');
+  if(esqN>0)partes.push(esqN+' esquecimento(s) de registro (-'+(3*esqN)+')');
+  const motivo=partes.length?partes.join('; '):'Sem descontos — pontualidade e assiduidade em dia';
+  return {nota,motivo,faltaNJ,atestado,esqN,horasAtraso};
+}
+
 function modalColab(nome){
   const p=perfilColab(nome);
   const b=p.base;
@@ -828,7 +887,18 @@ function modalColab(nome){
       </div>`;
   }
 
+  const notaInfo=calcularNota(nome);
+  const notaCor=notaInfo.nota>=90?'#1E9E5A':notaInfo.nota>=70?'#F5C542':notaInfo.nota>=50?'#E8873B':'#D63A4A';
   const body=`
+    <div style="display:flex;gap:16px;align-items:center;margin-bottom:14px;padding:14px 18px;background:var(--roxo-lav2);border-radius:14px">
+      <div style="width:70px;height:70px;border-radius:50%;background:#fff;border:4px solid ${notaCor};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        <span style="font-size:1.7rem;font-weight:800;color:${notaCor}">${notaInfo.nota}</span>
+      </div>
+      <div>
+        <div style="font-weight:800;font-size:.9rem;color:var(--tinta)">Nota de pontualidade e assiduidade ${help('nota')}</div>
+        <div style="font-size:.8rem;color:var(--cinza);margin-top:2px">${notaInfo.motivo}</div>
+      </div>
+    </div>
     <div class="mstat">
       <div class="b"><div class="v">${p.taxaConf}%</div><div class="k">Conformidade</div></div>
       <div class="b verde"><div class="v">${p.totOk}</div><div class="k">Conformes</div></div>
@@ -962,6 +1032,12 @@ function renderInsightsPonto(){
   const esqL=dados.filter(r=>r.situacao==='esq');
   if(esqL.length){const cnt={};esqL.forEach(r=>{cnt[r.nome]=(cnt[r.nome]||0)+1;});const top=Object.entries(cnt).sort((a,b)=>b[1]-a[1])[0];
     ins.push({c:'',ic:'🕳',key:'esq',t:`<b>${esqL.length} caso(s) de esquecimento de batida</b> (almoço não fechado). Destaque: <b>${top[0]}</b> (${top[1]}x).<div class="meta">Não conta como hora perdida — clique para ver e orientar a equipe.</div>`});}
+  const ausTipos={};dados.filter(r=>r.situacao==='aus'&&r.tipoAusencia).forEach(r=>{ausTipos[r.tipoAusencia]=(ausTipos[r.tipoAusencia]||0)+1;});
+  const ausOrd=Object.entries(ausTipos).sort((a,b)=>b[1]-a[1]);
+  if(ausOrd.length){
+    const faltaNJ=ausTipos['Falta Não Justificada']||0;
+    ins.push({c:faltaNJ>0?'warn':'',ic:'📋',key:'ausTipos',t:`Ausências por tipo: ${ausOrd.slice(0,4).map(([t,n])=>`<b>${t}</b> (${n})`).join(' · ')}${ausOrd.length>4?'…':''}.<div class="meta">${faltaNJ>0?faltaNJ+' são falta não justificada — impacta o absenteísmo. ':''}Clique para ver a lista completa.</div>`});
+  }
   if(dados.length&&!nok.length)ins.push({c:'good',ic:'🎉',key:'ok',t:`<b>Nenhuma irregularidade</b> neste recorte. Equipe em dia!`});
   if(!ins.length)ins.push({c:'',ic:'ℹ️',key:'',t:'Sem dados suficientes para insights neste filtro.'});
   box.innerHTML=ins.map((x,i)=>`<div class="insight ${x.c}" data-i="${i}"><div class="ic">${x.ic}</div><div class="txt">${x.t}</div>${x.key?'<div class="arrow">›</div>':''}</div>`).join('');
@@ -1036,12 +1112,19 @@ function modalInsight(ins,dados){
     const esqL=dados.filter(r=>r.situacao==='esq');
     body=`<p>Casos em que o colaborador <b>bateu a saída para o almoço mas não registrou a volta</b> — o sistema só encontrou a batida do fim do dia, fazendo o almoço parecer irreal. <b>Não é hora perdida</b>, é falha de registro. Oriente a equipe a sempre bater os 4 pontos.</p>${miniList(esqL,true)}`;
     abrirModal('🕳 Esquecimento de batida',esqL.length+' registros',body,()=>modalInsight(ins,dados));
+  }else if(ins.key==='ausTipos'){
+    const ausL=dados.filter(r=>r.situacao==='aus'&&r.tipoAusencia);
+    const cnt={};ausL.forEach(r=>{cnt[r.tipoAusencia]=(cnt[r.tipoAusencia]||0)+1;});
+    const resumoTable=Object.entries(cnt).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`<tr><td><b>${t}</b></td><td>${n}</td>${AUSENCIA_JUSTIFICADAS.has(t)?'<td style="color:var(--verde)">Justificada</td>':'<td style="color:var(--vermelho)">Impacta absenteísmo</td>'}</tr>`).join('');
+    body=`<table class="mini-tbl"><thead><tr><th>Tipo</th><th>Dias</th><th>Status</th></tr></thead><tbody>${resumoTable}</tbody></table>
+      <h4>📋 Detalhe por colaborador</h4>${miniList(ausL,true)}`;
+    abrirModal('📋 Ausências por tipo',ausL.length+' registros',body,()=>modalInsight(ins,dados));
   }else{abrirModal('🎉 Tudo certo','',`<p>Nenhuma irregularidade neste recorte.</p>`);}
 }
 function miniList(regs,showSetor){
   if(!regs.length)return '<p style="color:var(--cinza);font-size:.82rem">Nenhum.</p>';
   return `<table class="mini-tbl"><thead><tr><th>Data</th>${showSetor?'<th>Setor</th>':''}<th>Colaborador</th><th>Ocorrência</th></tr></thead><tbody>
-    ${regs.map(r=>`<tr><td><b>${dfmt(r.data)}</b></td>${showSetor?'<td>'+r.setor+'</td>':''}<td class="tbl-link" onclick="irPara(()=>modalColab('${r.nome.replace(/'/g,"\\'")}'))">${r.nome}</td><td style="color:var(--vermelho)">${r.flags.join(' · ')}</td></tr>`).join('')}
+    ${regs.map(r=>`<tr><td><b>${dfmt(r.data)}</b></td>${showSetor?'<td>'+r.setor+'</td>':''}<td class="tbl-link" onclick="irPara(()=>modalColab('${r.nome.replace(/'/g,"\\'")}'))">${r.nome}</td><td style="color:var(--vermelho)">${r.flags.length?r.flags.join(' · '):(r.tipoAusencia||r.obs||'—')}</td></tr>`).join('')}
     </tbody></table>`;
 }
 
@@ -1067,10 +1150,15 @@ function renderWatchPonto(){
 }
 
 /* ---------- ANÁLISE ESTRATÉGICA por setor ---------- */
+function jornadaPrevistaDiaria(refE,refS){
+  const e=toMin(refE), s=toMin(refS);
+  if(e==null||s==null) return 0;
+  return Math.max(0, s-e-60); // desconta 1h de almoço padrão da jornada prevista
+}
 function analiseSetor(dados){
   const setores=[...new Set(dados.map(r=>r.setor))].filter(s=>s!=='(sem cadastro)').sort();
   return setores.map(s=>{
-    const rr=dados.filter(r=>r.setor===s);
+    const rr=dados.filter(r=>r.setor===s&&!r.homeoffice); // home office não entra na métrica presencial
     const presenca=rr.filter(r=>r.situacao!=='aus');
     const ok=presenca.filter(r=>r.situacao==='ok').length;
     const nokReal=presenca.filter(r=>r.situacao==='nok').length; // atraso de horário
@@ -1083,11 +1171,22 @@ function analiseSetor(dados){
     // aderência: conformes ÷ presenças (esquecimento entra como não conforme)
     const aderencia=presenca.length?Math.round(ok/presenca.length*100):null;
     const perdidaPorPessoa=headcount?perdida/headcount:0;
+    // absenteísmo % = (horas de falta não justificada + horas de atestado) / horas previstas do setor
+    let horasPrevTotal=0, horasFaltaNJ=0, horasAtestado=0;
+    rr.forEach(r=>{
+      const prev=jornadaPrevistaDiaria(r.refE,r.refS);
+      horasPrevTotal+=prev;
+      if(r.situacao==='aus'){
+        if(r.tipoAusencia==='Falta Não Justificada') horasFaltaNJ+=prev;
+        else if(isAtestado(r.tipoAusencia)) horasAtestado+=prev;
+      }
+    });
+    const absenteismo=horasPrevTotal?((horasFaltaNJ+horasAtestado)/horasPrevTotal*100):0;
     const ofc={};rr.filter(r=>r.horasPerdidas>0).forEach(r=>{ofc[r.nome]=(ofc[r.nome]||0)+r.horasPerdidas;});
     const topOfensor=Object.entries(ofc).sort((a,b)=>b[1]-a[1])[0];
     let cE=0,cR=0,cS=0;rr.forEach(r=>{if(r.flags.some(f=>f.startsWith('Entrada')))cE++;if(r.flags.some(f=>/almo[çc]o/i.test(f)))cR++;if(r.flags.some(f=>f.startsWith('Saída')))cS++;});
     const prob=[['Atraso entrada',cE],['Almoço extra',cR],['Saída antecip.',cS],['Esqueceu de bater',esq]].sort((a,b)=>b[1]-a[1])[0];
-    return {setor:s,headcount,ok,nok,nokReal,esq,aus,total:rr.length,aderencia,perdida,gerada,perdidaPorPessoa,
+    return {setor:s,headcount,ok,nok,nokReal,esq,aus,total:rr.length,aderencia,perdida,gerada,perdidaPorPessoa,absenteismo,horasFaltaNJ,horasAtestado,horasPrevTotal,
       topOfensor:topOfensor?{nome:topOfensor[0],min:topOfensor[1]}:null,
       problema:prob[1]>0?prob[0]:'—'};
   });
@@ -1136,10 +1235,13 @@ function renderEstrategico(dados){
   const totP=totPerdida, totG=totGerada;
   const totOk=totOkT, totNok=totNokT;
   const aderGeral=aderTot;
+  const totHFaltaNJ=an.reduce((s,a)=>s+a.horasFaltaNJ,0), totHAtestado=an.reduce((s,a)=>s+a.horasAtestado,0), totHPrev=an.reduce((s,a)=>s+a.horasPrevTotal,0);
+  const absenteismoGeral=totHPrev?((totHFaltaNJ+totHAtestado)/totHPrev*100):0;
   el('kpisImpacto').innerHTML=`
     <div class="kpi" style="cursor:default"><div class="n">${aderGeral}%</div><div class="l">Aderência geral ${help('aderencia')}</div><div class="sub">${totOk} de ${totOk+totNok} pontuais</div></div>
     <div class="kpi verm" style="cursor:default"><div class="n">${hhmm(totP)}</div><div class="l">⏳ Horas perdidas ${help('horaPerdida')}</div><div class="sub">${totHead?hhmm(Math.round(totP/totHead)):'—'} por colaborador</div></div>
     <div class="kpi amarelo" style="cursor:default"><div class="n">${hhmm(totG)}</div><div class="l">💰 HE não autoriz. (ponto) ${help('horaGerada')}</div><div class="sub">passivo de HE não autorizada</div></div>
+    <div class="kpi laranja" style="cursor:default"><div class="n">${absenteismoGeral.toFixed(1)}%</div><div class="l">🚫 Absenteísmo ${help('absenteismo')}</div><div class="sub">falta N/J + atestado</div></div>
     <div class="kpi laranja" style="cursor:default"><div class="n">${an.filter(a=>a.aderencia!=null&&a.aderencia<60).length}</div><div class="l">🔴 Setores críticos ${help('aderencia','right')}</div><div class="sub">aderência abaixo de 60%</div></div>`;
 }
 
@@ -1249,9 +1351,13 @@ function consolidar(dados){
   const byC={};
   dados.forEach(r=>{
     if(!byC[r.nome])byC[r.nome]={nome:r.nome,setor:r.setor,sub:r.sub,tipo:r.tipo,dias:new Set(),
-      nOk:0,nNok:0,nAus:0,nEsq:0,nDesE:0,sE:0,nDesR:0,sR:0,nDesS:0,sS:0,perdida:0,gerada:0};
+      nOk:0,nNok:0,nAus:0,nEsq:0,nDesE:0,sE:0,nDesR:0,sR:0,nDesS:0,sS:0,perdida:0,gerada:0,nFaltaNJ:0,nAtestado:0};
     const c=byC[r.nome];c.dias.add(r.data);
     if(r.situacao==='ok')c.nOk++; else if(r.situacao==='nok')c.nNok++; else if(r.situacao==='esq')c.nEsq++; else c.nAus++;
+    if(r.situacao==='aus'){
+      if(r.tipoAusencia==='Falta Não Justificada')c.nFaltaNJ++;
+      else if(isAtestado(r.tipoAusencia))c.nAtestado++;
+    }
     if(r.situacao==='nok'&&r.dE!=null&&r.dE>0){c.nDesE++;c.sE+=r.dE;}
     const alm=r.detalhe.almoco;
     if(r.situacao==='nok'&&alm&&alm.tipo!=='esquecido'){if(alm.tipo==='fixo'&&alm.delta>0){c.nDesR++;c.sR+=alm.delta;}
@@ -1259,13 +1365,18 @@ function consolidar(dados){
     if(r.situacao==='nok'&&r.dS!=null&&r.dS<0){c.nDesS++;c.sS+=Math.abs(r.dS);}
     c.perdida+=(r.horasPerdidas||0);c.gerada+=(r.horasGeradas||0);
   });
-  return Object.values(byC).map(c=>({...c,
+  return Object.values(byC).map(c=>{
+    const horasAtraso=c.perdida/60;
+    const nota=Math.max(0,Math.round(100-15*c.nFaltaNJ-5*c.nAtestado-2*horasAtraso-3*c.nEsq));
+    return {...c,
     diasN:c.dias.size,
     presenca:c.nOk+c.nNok,
     aderencia:(c.nOk+c.nNok+c.nEsq)?Math.round(c.nOk/(c.nOk+c.nNok+c.nEsq)*100):null,
     medE:c.nDesE?Math.round(c.sE/c.nDesE):null,
     medR:c.nDesR?Math.round(c.sR/c.nDesR):null,
-    medS:c.nDesS?Math.round(c.sS/c.nDesS):null}));
+    medS:c.nDesS?Math.round(c.sS/c.nDesS):null,
+    nota};
+  });
 }
 
 function renderConsol(dados){
@@ -1274,6 +1385,7 @@ function renderConsol(dados){
     {k:'nome',t:'Colaborador',al:'left'},
     {k:'setor',t:'Setor',al:'left'},
     {k:'diasN',t:'Dias'},
+    {k:'nota',t:'⭐ Nota',h:'nota'},
     {k:'aderencia',t:'Aderência',h:'aderencia'},
     {k:'nNok',t:'Irregul.',h:'irregHorario'},
     {k:'nEsq',t:'🕳 Esqueceu',h:'irregRegistro'},
@@ -1295,17 +1407,19 @@ function renderConsol(dados){
   });
 
   const tb=el('tblConsol').querySelector('tbody');
-  if(!arr.length){tb.innerHTML=`<tr><td colspan="10" class="empty"><div class="ic">🔍</div>Nenhum colaborador neste filtro.</td></tr>`;return;}
+  if(!arr.length){tb.innerHTML=`<tr><td colspan="12" class="empty"><div class="ic">🔍</div>Nenhum colaborador neste filtro.</td></tr>`;return;}
   tb.innerHTML=arr.map(c=>{
     const adCor=c.aderencia==null?'':c.aderencia>=80?'color:var(--verde);font-weight:700':c.aderencia>=60?'color:var(--amarelo-esc);font-weight:700':'color:var(--vermelho);font-weight:700';
     const hz=c.tipo==='HORISTA'?' <span class="pill horista">horista</span>':c.tipo==='HOME OFFICE'?' <span class="pill" style="background:#E0EFFF;color:#1A5FC4">🏠 home office</span>':'';
     const mE=c.medE!=null?`<b class="late">+${c.medE}min</b> <small style="color:#aaa">(${c.nDesE}x)</small>`:'—';
     const mR=c.medR!=null?`<b class="late">+${c.medR}min</b> <small style="color:#aaa">(${c.nDesR}x)</small>`:'—';
     const mS=c.medS!=null?`<b class="late">${c.medS}min</b> <small style="color:#aaa">(${c.nDesS}x)</small>`:'—';
+    const notaCor=c.nota>=90?'var(--verde)':c.nota>=70?'#D99E1F':c.nota>=50?'var(--laranja)':'var(--vermelho)';
     return `<tr>
       <td class="tbl-link" onclick="modalColab('${c.nome.replace(/'/g,"\\'")}')"><b>${c.nome}</b>${hz}</td>
       <td>${c.setor}</td>
       <td>${c.diasN}</td>
+      <td style="color:${notaCor};font-weight:800">${c.nota}</td>
       <td style="${adCor}">${c.aderencia==null?'—':c.aderencia+'%'}</td>
       <td style="${c.nNok?'color:var(--vermelho);font-weight:700':''}">${c.nNok}</td>
       <td style="${c.nEsq?'color:#6B21C7;font-weight:700':''}">${c.nEsq||'—'}</td>
@@ -1697,7 +1811,7 @@ function onBanco(file){
 }
 
 document.addEventListener('DOMContentLoaded',async()=>{
-  const bt=el('buildTag'); if(bt) bt.textContent='build 2026-07-24 16:37';
+  const bt=el('buildTag'); if(bt) bt.textContent='build 2026-07-27 17:00';
   await carregarBase();
   setupDrop('dzPonto','filePonto',onPonto);
   setupDrop('dzBanco','fileBanco',onBanco);
@@ -1739,6 +1853,19 @@ function pessoasFocais(setor,base){
     else if(v.n===2)acao='Conversa de alinhamento';
     return {nome,n:v.n,perdida:v.perdida,nEsq:v.nEsq,acao};
   });
+}
+// TOP 3 destaques do setor: só entra quem tirou Nota 100 (zero desconto de
+// qualquer tipo — sem falta, atestado, atraso ou esquecimento no período).
+// Se ninguém atingir isso, a lista vem vazia de propósito — não força destaque
+// artificial. Em caso de empate, desempata por mais dias trabalhados (consistência).
+function destaquesSetor(setor,base){
+  const pessoas=[...new Set(base.filter(r=>r.setor===setor&&!r.homeoffice).map(r=>r.nome))];
+  const candidatos=pessoas.map(nome=>{
+    const info=calcularNota(nome);
+    const dias=new Set(base.filter(r=>r.nome===nome).map(r=>r.data)).size;
+    return {nome,nota:info.nota,dias};
+  }).filter(x=>x.nota===100);
+  return candidatos.sort((a,b)=>b.dias-a.dias).slice(0,3);
 }
 // detalhe dia a dia de uma pessoa — dá ao gestor local o motivo exato de cada ocorrência,
 // pronto para embasar a conversa (sem precisar abrir o dashboard de novo)
@@ -2022,6 +2149,15 @@ function gerarPDFResumo(setoresSelecionados){
     if(a.aderencia!=null&&a.aderencia<60)paragraph('Sugere-se uma reunião formal com a liderança do setor esta semana, apresentando os dados deste relatório e definindo um plano de ação com responsável e prazo. Casos individuais reincidentes (ver detalhamento na próxima página) devem ser tratados em conversas separadas.');
     else if(a.aderencia!=null&&a.aderencia<80)paragraph('Um alinhamento coletivo rápido (5-10min em reunião de equipe) reforçando a regra e o problema dominante costuma resolver desvios neste patamar, sem necessidade de medida individual generalizada.');
     else paragraph('Setor não demanda alinhamento coletivo no momento. Reconhecimento da equipe pelo bom desempenho é uma ação de baixo custo e alto retorno.');
+
+    secTitle('Destaques do setor',GREEN);
+    const destaques=destaquesSetor(a.setor,base);
+    if(destaques.length){
+      paragraph('Colaboradores com Nota 100 no período — zero falta, atestado, atraso ou esquecimento de registro. Use como referência positiva com a equipe.',GRAY);
+      miniTable(['Colaborador','Dias trabalhados','Nota'],
+        destaques.map(d=>[d.nome,d.dias,d.nota]),
+        [90,pageW-margin*2-90-30,30]);
+    } else paragraph('Nenhum colaborador com Nota 100 (zero desconto) neste setor no período.',GRAY);
 
     secTitle('Pessoas focais para feedback',RED);
     const focais=pessoasFocais(a.setor,base);
