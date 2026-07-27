@@ -398,7 +398,7 @@ const BASE_EMBUTIDA = [{"nome": "João Lucas Idelfonso da Silva Rosa", "setor": 
    - LOGÍSTICA: horário fixo (entrada 08:00, almoço 12:00→13:00, saída 18:00)
    - Demais áreas: duração (entrada 08:00, almoço até 1h por duração, saída 18:00)
    - Sexta: saída 17:00 para todos (quem já sai antes mantém)
-   - Silas 07:00→17:00 · Kaylane →16:30 · tolerância ±10min
+   - Silas 07:00→17:00 · Kaylane →16:30 · tolerância legal: 5min/batida · 10min soma do dia (Art. 58 CLT)
    ============================================================ */
 const TOL=10;
 let BASE=[], PONTO=[], BANCO=[], charts={};
@@ -409,14 +409,14 @@ const hhmm=m=>{if(m==null)return'—';const n=m<0;m=Math.abs(m);return(n?'-':'')
 const el=id=>document.getElementById(id);
 /* ---------- glossário / tooltips de ajuda ---------- */
 const GLOSSARIO={
-  tolerancia:`Todos os cálculos já descontam uma <b>tolerância de ±10 minutos</b> por batida (padrão de oscilação aceitável). Só é marcado desvio o que passa disso.`,
-  conforme:`Registro dentro das regras de horário do colaborador, considerando a tolerância de ±10min. Entrou, almoçou e saiu no tempo esperado.`,
-  irregHorario:`Desvio real de horário além dos 10min de tolerância: <b>atraso na entrada</b>, <b>saída antecipada</b> ou <b>almoço acima do limite</b>. Impacta a produtividade.`,
+  tolerancia:`Regra do <b>Art. 58 §1º da CLT</b>: até <b>5min de variação por batida</b> é desprezado, mas a <b>soma das variações do dia não pode passar de 10min</b>. Se uma batida sozinha passar de 5min OU a soma do dia passar de 10min, o dia inteiro entra no cálculo (não só o excedente) — é assim que a Súmula 366 do TST determina.`,
+  conforme:`Registro dentro das regras de horário do colaborador, considerando a tolerância legal (Art. 58 CLT: 5min por batida, 10min de soma no dia). Entrou, almoçou e saiu no tempo esperado.`,
+  irregHorario:`Desvio real de horário além da tolerância legal (Art. 58 CLT): <b>atraso na entrada</b>, <b>saída antecipada</b> ou <b>almoço acima do limite</b>. Impacta a produtividade.`,
   irregRegistro:`O colaborador <b>esqueceu de bater um ponto</b> (quase sempre a volta do almoço) — o sistema só achou a batida do fim do dia, fazendo o almoço parecer irreal (>2h). É falha de registro, não de produtividade. Conta como irregularidade, mas <b>não</b> como hora perdida.`,
   ausente:`Dia sem batida por falta, folga, férias ou atestado — conforme lançado pelo DP no relatório.`,
-  atrasoEntrada:`Diferença entre a batida de entrada real e o horário de entrada do colaborador, além da tolerância de 10min. Ex.: ref 08:00, bateu 08:25 → +15min de atraso.`,
-  almocoExtra:`Tempo de almoço que ultrapassou o limite. Para a <b>Logística</b>, o horário é fixo (retorno 13:00). Para as <b>demais áreas</b>, conta a duração (até 1h). Sempre descontando 10min de tolerância.`,
-  saidaAntec:`Quando o colaborador sai antes do horário previsto, além dos 10min de tolerância. Ex.: ref 18:00, saiu 17:40 → 20min antes.`,
+  atrasoEntrada:`Diferença entre a batida de entrada real e o horário de entrada do colaborador, contada quando o dia passa da tolerância legal (5min por batida / 10min somando o dia). Ex.: ref 08:00, bateu 08:25 → +15min de atraso.`,
+  almocoExtra:`Tempo de almoço que ultrapassou o limite. Para a <b>Logística</b>, o horário é fixo (retorno 13:00). Para as <b>demais áreas</b>, conta a duração (até 1h). Contado quando o dia passa da tolerância legal (5min por batida / 10min somando o dia).`,
+  saidaAntec:`Quando o colaborador sai antes do horário previsto e o dia passa da tolerância legal (5min por batida / 10min somando o dia). Ex.: ref 18:00, saiu 17:40 → 20min antes.`,
   horaPerdida:`<b>Passivo de produtividade:</b> soma dos minutos que deveriam estar em serviço e não estavam — atraso na entrada + almoço além do limite + saída antecipada. Já descontada a tolerância. <b>Não inclui</b> esquecimento de batida.`,
   horaGerada:`<b>Estimativa feita a partir do PONTO — não é o banco de horas oficial.</b> É tempo detectado pelas batidas (entrada adiantada, retorno de almoço adiantado ou saída após o horário) que sugere hora extra sem autorização. Se você também subiu o relatório de banco de horas, o saldo oficial dele aparece separado, ao lado desta estimativa, para comparação — os dois números podem não bater, porque o banco de horas oficial pode ter ajustes, aprovações e correções que o ponto sozinho não sabe.`,
   aderencia:`% de registros <b>conformes</b> sobre o total de presenças (conformes + irregulares). Não conta ausências. Padrão de mercado: 🟢 ≥80% saudável · 🟡 60-79% atenção · 🔴 <60% crítico.`,
@@ -437,7 +437,7 @@ function help(chave,pos){
   return `<span class="help" onclick="event.stopPropagation();glossPopup('${chave}')" style="cursor:pointer" title="Ver definição">ⓘ</span>`;
 }
 // versão para cabeçalhos de tabela: abre a definição num popup flutuante (não corta com overflow)
-const GLOSS_TITULO={tolerancia:'Tolerância de ±10min',conforme:'Conforme',irregHorario:'Irregularidade de horário',
+const GLOSS_TITULO={tolerancia:'Tolerância legal (Art. 58 CLT)',conforme:'Conforme',irregHorario:'Irregularidade de horário',
   irregRegistro:'Irregularidade de registro',ausente:'Ausente',atrasoEntrada:'Atraso na entrada',almocoExtra:'Almoço acima do limite',
   saidaAntec:'Saída antecipada',horaPerdida:'Horas perdidas',horaGerada:'HE não autorizada — estimativa via ponto',aderencia:'Aderência ao ponto',
   perdidaPessoa:'Perdida por colaborador',reincidente:'Colaborador reincidente',tendencia:'Tendência',diaCheio:'Dia fechado',
@@ -579,18 +579,47 @@ function avaliar(r){
   // detectar esquecimento ANTES de qualquer cálculo de almoço
   if(r.saidaInt&&r.retInt){ durAlm=toMin(r.retInt)-toMin(r.saidaInt); if(durAlm>ALMOCO_IRREAL) esqueceu=true; }
 
-  if(r.entrada){dE=toMin(r.entrada)-toMin(refE); if(dE>TOL){flags.push('Entrada +'+dE+'min');horasPerdidas+=dE;} else if(dE<-TOL){horasGeradas+=Math.abs(dE);} detalhe.entrada={real:r.entrada,ref:refE,delta:dE};}
-  // saída e almoço só entram nos cálculos se NÃO houve esquecimento (senão os números são fantasia)
+  if(r.entrada){dE=toMin(r.entrada)-toMin(refE); detalhe.entrada={real:r.entrada,ref:refE,delta:dE};}
+  let almDelta=null,almTipoCalc=null;
   if(!esqueceu){
-    if(r.saida){dS=toMin(r.saida)-toMin(refS); if(dS<-TOL){flags.push('Saída '+Math.abs(dS)+'min antes');horasPerdidas+=Math.abs(dS);} else if(dS>TOL){horasGeradas+=dS;} detalhe.saida={real:r.saida,ref:refS,delta:dS};}
+    if(r.saida){dS=toMin(r.saida)-toMin(refS); detalhe.saida={real:r.saida,ref:refS,delta:dS};}
     if(r.saidaInt&&r.retInt){
-      if(isLog){ dR=toMin(r.retInt)-toMin('13:00'); if(dR>TOL){flags.push('Ret. almoço +'+dR+'min');horasPerdidas+=dR;} else if(dR<-TOL){horasGeradas+=Math.abs(dR);} detalhe.almoco={tipo:'fixo',real:r.retInt,ref:'13:00',delta:dR,dur:durAlm}; }
-      else{ const extra=durAlm-60; if(extra>TOL){flags.push('Almoço '+durAlm+'min (+'+extra+'min)');horasPerdidas+=extra;} else if(extra<-TOL){horasGeradas+=Math.abs(extra);} detalhe.almoco={tipo:'duracao',dur:durAlm,extra}; }
+      if(isLog){ dR=toMin(r.retInt)-toMin('13:00'); almDelta=dR; almTipoCalc='fixo'; detalhe.almoco={tipo:'fixo',real:r.retInt,ref:'13:00',delta:dR,dur:durAlm}; }
+      else{ const extra=durAlm-60; almDelta=extra; almTipoCalc='duracao'; detalhe.almoco={tipo:'duracao',dur:durAlm,extra}; }
     }
   } else {
     detalhe.almoco={tipo:'esquecido',dur:durAlm,saidaInt:r.saidaInt,retInt:r.retInt};
     if(r.saida) detalhe.saida={real:r.saida,ref:refS,delta:toMin(r.saida)-toMin(refS)};
-    // batidas embaralhadas → qualquer penalidade de horas é ruído. Zera tudo e limpa flags de horário.
+  }
+
+  if(!esqueceu){
+    // REGRA CLT (Art. 58 §1º + Súmula 366 TST): até 5min de variação por batida é
+    // desprezado, mas a SOMA das variações do dia não pode passar de 10min. Se
+    // qualquer batida sozinha passar de 5min OU a soma do dia passar de 10min,
+    // o dia inteiro entra no cálculo (não só o excedente).
+    const devE=dE!=null?Math.abs(dE):0;
+    const devS=dS!=null?Math.abs(dS):0;
+    const devAlm=almDelta!=null?Math.abs(almDelta):0;
+    const somaDesvios=devE+devS+devAlm;
+    const foraTolerancia = devE>5 || devS>5 || devAlm>5 || somaDesvios>10;
+
+    if(foraTolerancia){
+      if(dE&&dE>0){flags.push('Entrada +'+dE+'min');horasPerdidas+=dE;}
+      else if(dE&&dE<0){horasGeradas+=Math.abs(dE);}
+      if(dS!=null&&dS<0){flags.push('Saída '+Math.abs(dS)+'min antes');horasPerdidas+=Math.abs(dS);}
+      else if(dS&&dS>0){horasGeradas+=dS;}
+      if(almDelta!=null&&almDelta!==0){
+        if(almTipoCalc==='fixo'){
+          if(almDelta>0){flags.push('Ret. almoço +'+almDelta+'min');horasPerdidas+=almDelta;}
+          else{horasGeradas+=Math.abs(almDelta);}
+        }else{
+          if(almDelta>0){flags.push('Almoço '+durAlm+'min (+'+almDelta+'min)');horasPerdidas+=almDelta;}
+          else{horasGeradas+=Math.abs(almDelta);}
+        }
+      }
+    }
+  } else {
+    // batidas embaralhadas por esquecimento → qualquer penalidade de horas é ruído
     horasPerdidas=0; horasGeradas=0; flags.length=0;
   }
   let situacao='ok',status='✅ Conforme';
@@ -775,7 +804,7 @@ function modalColab(nome){
 
   // subgrupo de irregularidades por tipo (o que o usuário pediu)
   const tiposIrr=[
-    {ic:'🚪',nome:'Atraso na entrada',n:p.cE,cor:'#D63A4A',desc:'chegou depois do horário (além dos 10min)'},
+    {ic:'🚪',nome:'Atraso na entrada',n:p.cE,cor:'#D63A4A',desc:'chegou depois do horário (dia fora da tolerância legal)'},
     {ic:'🍽',nome:'Almoço acima do limite',n:p.cR,cor:'#E8873B',desc:'ultrapassou o tempo de almoço'},
     {ic:'🏃',nome:'Saída antecipada',n:p.cS,cor:'#C4456B',desc:'saiu antes do horário'},
     {ic:'🕳',nome:'Esqueceu de bater ponto',n:p.totEsq,cor:'#6B21C7',desc:'não registrou uma das batidas'}
@@ -882,7 +911,7 @@ function renderPonto(){
     <div class="it"><span class="sw" style="background:var(--vermelho)"></span><b>Irregul. horário</b> ${help('irregHorario')}</div>
     <div class="it"><span class="sw" style="background:#6B21C7"></span><b>Irregul. registro</b> ${help('irregRegistro')}</div>
     <div class="it"><span class="sw" style="background:var(--laranja)"></span><b>Ausente</b> ${help('ausente')}</div>
-    <div class="it">⏱ <b>Tolerância ±10min</b> ${help('tolerancia')}</div>
+    <div class="it">⏱ <b>Tolerância legal (5min/batida · 10min/dia)</b> ${help('tolerancia')}</div>
     <div class="it">📅 <b>Só dias fechados</b> ${help('diaCheio','right')}</div>`;
 
   renderResumoColab(dados);
@@ -1223,11 +1252,11 @@ function consolidar(dados){
       nOk:0,nNok:0,nAus:0,nEsq:0,nDesE:0,sE:0,nDesR:0,sR:0,nDesS:0,sS:0,perdida:0,gerada:0};
     const c=byC[r.nome];c.dias.add(r.data);
     if(r.situacao==='ok')c.nOk++; else if(r.situacao==='nok')c.nNok++; else if(r.situacao==='esq')c.nEsq++; else c.nAus++;
-    if(r.dE!=null&&r.dE>TOL){c.nDesE++;c.sE+=r.dE;}
+    if(r.situacao==='nok'&&r.dE!=null&&r.dE>0){c.nDesE++;c.sE+=r.dE;}
     const alm=r.detalhe.almoco;
-    if(alm&&alm.tipo!=='esquecido'){if(alm.tipo==='fixo'&&alm.delta>TOL){c.nDesR++;c.sR+=alm.delta;}
-      if(alm.tipo==='duracao'&&alm.extra>TOL){c.nDesR++;c.sR+=alm.extra;}}
-    if(r.dS!=null&&r.dS<-TOL&&!r.esqueceu){c.nDesS++;c.sS+=Math.abs(r.dS);}
+    if(r.situacao==='nok'&&alm&&alm.tipo!=='esquecido'){if(alm.tipo==='fixo'&&alm.delta>0){c.nDesR++;c.sR+=alm.delta;}
+      if(alm.tipo==='duracao'&&alm.extra>0){c.nDesR++;c.sR+=alm.extra;}}
+    if(r.situacao==='nok'&&r.dS!=null&&r.dS<0){c.nDesS++;c.sS+=Math.abs(r.dS);}
     c.perdida+=(r.horasPerdidas||0);c.gerada+=(r.horasGeradas||0);
   });
   return Object.values(byC).map(c=>({...c,
@@ -1323,8 +1352,9 @@ function renderTablePonto(dados){
   const tb=el('tblPonto').querySelector('tbody');
   if(!dados.length){tb.innerHTML=`<tr><td colspan="10" class="empty"><div class="ic">🔍</div>Nenhum registro para este filtro.</td></tr>`;return;}
   tb.innerHTML=dados.map(r=>{
-    const eC=r.dE>TOL?'late':'',sC=r.dS<-TOL?'late':'';
-    const rC=(r.isLog&&r.dR>TOL)||(!r.isLog&&r.detalhe.almoco&&r.detalhe.almoco.extra>TOL)?'late':'';
+    const eC=(r.situacao==='nok'&&r.dE>0)?'late':'';
+    const sC=(r.situacao==='nok'&&r.dS<0)?'late':'';
+    const rC=(r.situacao==='nok'&&r.detalhe.almoco&&(r.detalhe.almoco.delta>0||r.detalhe.almoco.extra>0))?'late':'';
     let pill=r.homeoffice?'<span class="pill" style="background:#E0EFFF;color:#1A5FC4">🏠 Home office</span>':r.situacao==='ok'?'<span class="pill ok">✅ OK</span>':r.situacao==='esq'?'<span class="pill esq">🕳 Irregular · esqueceu de bater</span>':r.situacao==='nok'?`<span class="pill nok">⚠️ ${r.flags.join(' · ')}</span>`:`<span class="pill aus">📋 ${r.obs}</span>`;
     // no caso de esquecimento, o retorno do almoço mostra vazio (não o valor irreal)
     const retDisplay=r.situacao==='esq'?'<span style="color:#6B21C7">🕳 —</span>':(r.retInt||'—');
