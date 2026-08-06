@@ -138,6 +138,22 @@ th .help .tip::after{top:auto;bottom:100%;border-top-color:transparent;border-bo
 .grid2>.card{margin:0}
 @media(max-width:960px){.grid2{grid-template-columns:1fr}}
 .chart-box{position:relative;height:320px}
+/* Conformidade diária interativa */
+.conf-wrap{display:flex;gap:14px;margin-top:10px}
+.conf-chart-area{flex:1;min-width:0}
+.conf-colab-panel{width:230px;flex-shrink:0;border:1px solid var(--linha);border-radius:12px;display:flex;flex-direction:column;max-height:400px}
+.conf-colab-header{padding:10px 12px;border-bottom:1px solid var(--linha);background:var(--roxo-lav)}
+.conf-colab-search{width:100%;box-sizing:border-box;padding:5px 8px;border:1px solid var(--linha);border-radius:8px;font-size:.78rem;margin-top:6px}
+.conf-colab-list{overflow-y:auto;flex:1;padding:6px 0}
+.conf-colab-item{display:flex;align-items:center;gap:8px;padding:5px 12px;cursor:pointer;font-size:.8rem;border-radius:0;transition:background .15s}
+.conf-colab-item:hover{background:var(--roxo-lav)}
+.conf-colab-item.on{background:var(--roxo-lav2);font-weight:700}
+.conf-colab-item input[type=checkbox]{width:14px;height:14px;accent-color:var(--roxo);cursor:pointer}
+.conf-setor-btns{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.conf-setor-btns .btn-sf{padding:5px 12px;border-radius:20px;font-size:.75rem;font-weight:600;border:1.5px solid var(--roxo-lav2);background:#fff;color:var(--tinta);cursor:pointer;transition:all .15s}
+.conf-setor-btns .btn-sf.on{background:var(--roxo);color:#fff;border-color:var(--roxo)}
+.conf-pct-badge{font-size:.72rem;color:var(--cinza);margin-left:auto;flex-shrink:0}
+@media(max-width:960px){.conf-wrap{flex-direction:column}.conf-colab-panel{width:100%;max-height:200px}}
 .sec-title{font-size:1.28rem;margin:26px 0 3px;display:flex;align-items:center;gap:10px}
 .sec-sub{color:var(--cinza);font-size:.88rem;margin-bottom:4px}
 
@@ -328,6 +344,26 @@ footer{text-align:center;padding:28px;color:var(--cinza);font-size:.78rem}
       <div class="card"><h3>🚨 Top ofensores — horas perdidas <span class="help" onclick="glossPopup('horaPerdida')" style="cursor:pointer" title="Ver definição">ⓘ</span></h3>
         <p class="hint">Colaboradores que mais impactam a produtividade.</p>
         <div class="chart-box"><canvas id="chOfensores"></canvas></div></div>
+    </div>
+
+    <div class="card" id="confDiariaCard" style="display:none">
+      <h3>📈 Conformidade diária — visão comparativa</h3>
+      <p class="hint">Compare o percentual de dias regulares ao longo do tempo — por setor ou selecionando colaboradores individualmente para sobrepor no gráfico.</p>
+      <div class="conf-wrap">
+        <div class="conf-chart-area">
+          <div class="conf-setor-btns" id="confSetorBtns"></div>
+          <div class="chart-box" style="height:280px"><canvas id="chConfDiaria"></canvas></div>
+          <p style="font-size:.75rem;color:var(--cinza);margin-top:6px">📌 Linha = média do setor/filtro selecionado. Barras coloridas = resultado diário (🟢≥80% · 🟡60-79% · 🔴&lt;60%). Cada linha extra = um colaborador selecionado.</p>
+        </div>
+        <div class="conf-colab-panel">
+          <div class="conf-colab-header">
+            <div style="font-size:.8rem;font-weight:800;color:var(--tinta)">Colaboradores <span id="confSelCount" style="color:var(--roxo)"></span></div>
+            <input id="confSearch" class="conf-colab-search" placeholder="buscar nome…">
+            <div style="display:flex;justify-content:flex-end;margin-top:4px"><button class="btn ghost" style="font-size:.72rem;padding:2px 8px" onclick="confLimparSel()">Limpar</button></div>
+          </div>
+          <div class="conf-colab-list" id="confColabList"></div>
+        </div>
+      </div>
     </div>
 
     <div class="card"><h3>👥 Resumo por colaborador</h3>
@@ -993,6 +1029,7 @@ function renderPonto(){
   renderInsightsPonto();
   renderWatchPonto();
   renderChartsPonto(dados);
+  renderConfDiaria();
   renderConsol(dados);
   renderTablePonto(dados);
 }
@@ -2194,6 +2231,132 @@ function gerarPDFResumo(setoresSelecionados){
   doc.save('resumo_executivo_pangeia_'+new Date().toISOString().slice(0,10)+'.pdf');
 }
 
+
+/* ============================================================
+   CONFORMIDADE DIÁRIA INTERATIVA — gráfico comparativo por
+   colaborador, inspirado no dashboard de produtividade.
+   ============================================================ */
+let CONF_SETOR='', CONF_SELECIONADOS=new Set(), CONF_SEARCH='';
+
+function confDados(){
+  // sempre usa o TODO (pontoEstrategico) — não sofre interferência de outros filtros
+  return PONTO.filter(r=>!CONF_SETOR||r.setor===CONF_SETOR);
+}
+
+function renderConfDiaria(){
+  if(!PONTO||!PONTO.length){ el('confDiariaCard').style.display='none'; return; }
+  el('confDiariaCard').style.display='';
+
+  // monta botões de setor (Todos + cada setor)
+  const setores=[...new Set(PONTO.filter(r=>r.setor!=='(sem cadastro)').map(r=>r.setor))].sort();
+  const btnBox=el('confSetorBtns');
+  if(!btnBox.children.length||btnBox.dataset.built!=='1'){
+    btnBox.innerHTML='<button class="btn-sf on" data-s="">Todos</button>'
+      +setores.map(s=>`<button class="btn-sf" data-s="${s}">${s}</button>`).join('');
+    btnBox.querySelectorAll('.btn-sf').forEach(b=>b.addEventListener('click',()=>{
+      CONF_SETOR=b.dataset.s; CONF_SELECIONADOS.clear();
+      btnBox.querySelectorAll('.btn-sf').forEach(x=>x.classList.toggle('on',x===b));
+      atualizarConfChart(); renderConfColabList();
+    }));
+    btnBox.dataset.built='1';
+  }
+
+  atualizarConfChart();
+  renderConfColabList();
+
+  el('confSearch').addEventListener('input',function(){CONF_SEARCH=this.value.toLowerCase();renderConfColabList();},{once:true});
+}
+
+function atualizarConfChart(){
+  const dados=confDados();
+  const dias=[...new Set(dados.map(r=>r.data))].sort();
+
+  // série geral: % conformidade por dia (ok / presença)
+  const geralData=dias.map(d=>{
+    const dd=dados.filter(r=>r.data===d&&r.situacao!=='aus');
+    const ok=dd.filter(r=>r.situacao==='ok').length;
+    return dd.length?Math.round(ok/dd.length*100):null;
+  });
+
+  const barColors=geralData.map(v=>v==null?'#ccc':v>=80?'rgba(30,158,90,0.55)':v>=60?'rgba(245,197,66,0.65)':'rgba(214,58,74,0.55)');
+
+  // datasets: sempre inicia com a barra geral
+  const datasets=[{
+    type:'bar',label:CONF_SETOR||'Geral',data:geralData,backgroundColor:barColors,
+    borderRadius:4,order:2,yAxisID:'y'
+  },{
+    type:'line',label:'Média '+(CONF_SETOR||'geral'),data:geralData,
+    borderColor:'#6B21C7',backgroundColor:'rgba(107,33,199,.12)',
+    borderWidth:2,pointRadius:4,tension:.3,fill:false,spanGaps:true,order:1,yAxisID:'y'
+  }];
+
+  // adiciona uma linha por colaborador selecionado
+  const cores=['#E8873B','#D63A4A','#1E9E5A','#3B82F6','#8B5CF6','#EC4899','#14B8A6'];
+  let ci=0;
+  CONF_SELECIONADOS.forEach(nome=>{
+    const pessoaDias=dias.map(d=>{
+      const r=PONTO.find(x=>x.nome===nome&&x.data===d);
+      if(!r||r.situacao==='aus') return null;
+      return r.situacao==='ok'?100:0;
+    });
+    const cor=cores[ci++%cores.length];
+    datasets.push({type:'line',label:nome.split(' ').slice(0,2).join(' '),data:pessoaDias,
+      borderColor:cor,backgroundColor:cor+'22',borderWidth:2.5,pointRadius:5,
+      tension:.2,fill:false,spanGaps:false,order:0,yAxisID:'y'});
+  });
+
+  mkChart('chConfDiaria','bar',{
+    labels:dias.map(dfmt),
+    datasets
+  },{
+    plugins:{
+      legend:{display:true,position:'top',labels:{font:{size:11},usePointStyle:true}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+(c.raw==null?'—':c.raw+'%')}}
+    },
+    scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'},grid:{color:'#EDE4FB'}}}
+  });
+
+  // atualiza contador de selecionados
+  const cnt=el('confSelCount');
+  if(cnt) cnt.textContent=CONF_SELECIONADOS.size?`(${CONF_SELECIONADOS.size} selecionado${CONF_SELECIONADOS.size>1?'s':''})`:''
+}
+
+function renderConfColabList(){
+  const dados=confDados();
+  const pessoas=[...new Set(dados.filter(r=>!r.homeoffice).map(r=>r.nome))].sort();
+  const filtradas=CONF_SEARCH?pessoas.filter(n=>norm(n).includes(norm(CONF_SEARCH))):pessoas;
+
+  el('confColabList').innerHTML=filtradas.map(nome=>{
+    const regs=dados.filter(r=>r.nome===nome&&r.situacao!=='aus');
+    const ok=regs.filter(r=>r.situacao==='ok').length;
+    const pct=regs.length?Math.round(ok/regs.length*100):null;
+    const pctStr=pct==null?'—':pct+'%';
+    const cor=pct==null?'var(--cinza)':pct>=80?'var(--verde)':pct>=60?'var(--laranja)':'var(--vermelho)';
+    const on=CONF_SELECIONADOS.has(nome);
+    return `<div class="conf-colab-item${on?' on':''}" onclick="confToggle(this,'${nome.replace(/'/g,"\\'")}')">
+      <input type="checkbox" ${on?'checked':''} onclick="event.stopPropagation();confToggle(this.closest('.conf-colab-item'),'${nome.replace(/'/g,"\\'")}')">
+      <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${primeiroNome(nome)}</span>
+      <span class="conf-pct-badge" style="color:${cor}">${pctStr}</span>
+    </div>`;
+  }).join('')||'<p style="padding:12px;color:var(--cinza);font-size:.8rem">Nenhum colaborador.</p>';
+
+  // conecta search box (pode já existir, só atualiza o handler)
+  const s=el('confSearch');
+  if(s&&!s.dataset.wired){s.dataset.wired='1';s.addEventListener('input',function(){CONF_SEARCH=this.value.toLowerCase();renderConfColabList();});}
+}
+
+function confToggle(item,nome){
+  if(CONF_SELECIONADOS.has(nome)) CONF_SELECIONADOS.delete(nome);
+  else CONF_SELECIONADOS.add(nome);
+  item.classList.toggle('on',CONF_SELECIONADOS.has(nome));
+  item.querySelector('input[type=checkbox]').checked=CONF_SELECIONADOS.has(nome);
+  atualizarConfChart();
+  const cnt=el('confSelCount');
+  if(cnt) cnt.textContent=CONF_SELECIONADOS.size?`(${CONF_SELECIONADOS.size} selecionado${CONF_SELECIONADOS.size>1?'s':''})`:''
+}
+function confLimparSel(){CONF_SELECIONADOS.clear();renderConfColabList();atualizarConfChart();}
+
+window.confToggle=confToggle;window.confLimparSel=confLimparSel;
 
 window.modalColab=modalColab;window.fecharModal=fecharModal;window.modalSetor=modalSetor;window.irPara=irPara;window.voltarModal=voltarModal;window.glossPopup=glossPopup;window.abrirSelecaoResumo=abrirSelecaoResumo;window.modalTipoOcorrencia=modalTipoOcorrencia;window.modalColabBanco=modalColabBanco;window.modalSetorBanco=modalSetorBanco;
 
